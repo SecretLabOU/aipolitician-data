@@ -48,11 +48,11 @@ def get_chroma_client():
         if not check_directory_access(DB_DIR):
             sys.exit(1)
             
-        # Create the client
-        client = chromadb.Client(
-            Settings(
-                anonymized_telemetry=False,
-                persist_directory=DB_DIR
+        # Use PersistentClient instead of Client for better persistence
+        client = chromadb.PersistentClient(
+            path=DB_DIR,
+            settings=Settings(
+                anonymized_telemetry=False
             )
         )
         
