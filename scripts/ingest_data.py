@@ -13,10 +13,35 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 # Default data file path - will be overridden by command line argument if provided
 DEFAULT_DATA_FILE = os.path.join(PROJECT_ROOT, "data", "sample_politician.json")
 
+# Database directory path
+DB_DIR = "/opt/chroma_db"
+
+def check_directory_access(directory):
+    """Check if the directory exists and is writable."""
+    # Check if directory exists
+    if not os.path.exists(directory):
+        try:
+            print(f"Directory {directory} does not exist. Attempting to create it...")
+            os.makedirs(directory, exist_ok=True)
+            print(f"Successfully created directory: {directory}")
+        except PermissionError:
+            print(f"Error: No permission to create directory {directory}")
+            print("Please create the directory manually or use a different path.")
+            print(f"You can run: sudo mkdir -p {directory} && sudo chown $USER:$USER {directory}")
+            return False
+    
+    # Check if directory is writable
+    if not os.access(directory, os.W_OK):
+        print(f"Error: No write permission for directory {directory}")
+        print(f"Please fix permissions with: sudo chown $USER:$USER {directory}")
+        return False
+    
+    return True
+
 def get_chroma_client():
     return chromadb.Client(
         Settings(
-            persist_directory="/opt/chroma_db"
+            persist_directory=DB_DIR
         )
     )
 
@@ -87,6 +112,10 @@ def ingest_politician(entry: dict, collection):
     # ...
     
 def main():
+    # First, check directory access
+    if not check_directory_access(DB_DIR):
+        sys.exit(1)
+    
     client = get_chroma_client()
     politicians_collection = client.get_or_create_collection("politicians")
     
@@ -114,6 +143,7 @@ def main():
 
     # Data is automatically persisted when using persist_directory
     print(f"Ingested data from {data_file} successfully!")
+    print(f"Database location: {DB_DIR}")
 
 if __name__ == "__main__":
     main()
