@@ -92,8 +92,7 @@ def main():
     # Ingest into Chroma
     ingest_politician(entry, politicians_collection)
 
-    # Persist to disk
-    client.persist()
+    # Data is automatically persisted when using persist_directory
     print(f"Ingested data from {DATA_FILE} successfully!")
 
 if __name__ == "__main__":

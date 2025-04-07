@@ -24,8 +24,7 @@ def main():
         metadatas=[{"politician_id": "john-doe-123"}]
     )
     
-    # Persist to disk
-    client.persist()
+    # Data is automatically persisted when using persist_directory
     print("Chroma setup complete. Test doc added.")
 
 if __name__ == "__main__":
