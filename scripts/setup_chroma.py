@@ -1,12 +1,15 @@
 # scripts/setup_chroma.py
+
 import chromadb
 from chromadb.config import Settings
 
 def main():
-    # Configure Chroma to store files in /opt/chroma_db
+    # The new config approach for local persistent storage:
     client = chromadb.Client(
         Settings(
-            chroma_db_impl="duckdb+parquet",
+            # Optional: turn off telemetry if you want
+            anonymized_telemetry=False,
+            # Just specify the folder path
             persist_directory="/opt/chroma_db"
         )
     )

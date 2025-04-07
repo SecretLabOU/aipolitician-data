@@ -5,7 +5,6 @@ from chromadb.config import Settings
 def main():
     client = chromadb.Client(
         Settings(
-            chroma_db_impl="duckdb+parquet",
             persist_directory="/opt/chroma_db"
         )
     )

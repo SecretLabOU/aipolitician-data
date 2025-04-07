@@ -10,7 +10,6 @@ DATA_FILE = os.path.join("data", "sample_politician.json")
 def get_chroma_client():
     return chromadb.Client(
         Settings(
-            chroma_db_impl="duckdb+parquet",
             persist_directory="/opt/chroma_db"
         )
     )
