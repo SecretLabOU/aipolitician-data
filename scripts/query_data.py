@@ -1,41 +1,14 @@
 # scripts/query_data.py
-import chromadb
-from chromadb.config import Settings
 import sys
-import os
 from chromadb.errors import NotFoundError
-
-# Database directory path
-DB_DIR = "/opt/chroma_db"
-
-def check_directory_access(directory):
-    """Check if the directory exists and is readable."""
-    # Check if directory exists
-    if not os.path.exists(directory):
-        print(f"Error: Database directory {directory} does not exist.")
-        print("Please run setup_chroma.py first to create the database.")
-        return False
-    
-    # Check if directory is readable
-    if not os.access(directory, os.R_OK):
-        print(f"Error: No read permission for directory {directory}")
-        print(f"Please fix permissions with: sudo chmod +r {directory}")
-        return False
-    
-    return True
+from chroma_config import get_chroma_client, print_collections, DB_DIR
 
 def main():
-    # First, check directory access
-    if not check_directory_access(DB_DIR):
-        sys.exit(1)
-    
-    client = chromadb.Client(
-        Settings(
-            persist_directory=DB_DIR
-        )
-    )
+    # Get the client from the shared config
+    client = get_chroma_client()
     
     try:
+        # Try to get the collection
         collection = client.get_collection("politicians")
         
         # Example: retrieve the top 3 docs most relevant to a question about healthcare
@@ -53,16 +26,18 @@ def main():
         print("1. Run the ingest_data.py script first to create the collection and add data.")
         print("2. Check that you're using the correct database path (/opt/chroma_db).")
         print("3. Ensure you have write permissions to the database directory.")
-        print("\nAvailable collections:")
+        
+        # List available collections to help troubleshoot
+        print_collections(client)
+        
+        # Try to recreate the collection as a fallback
+        print("\nAttempting to create the collection as a fallback...")
         try:
-            collections = client.list_collections()
-            if collections:
-                for coll in collections:
-                    print(f" - {coll.name}")
-            else:
-                print(" (No collections found)")
+            politicians_collection = client.create_collection("politicians")
+            print("Created empty 'politicians' collection. Please run ingest_data.py to add data.")
         except Exception as e:
-            print(f"Could not list collections: {e}")
+            print(f"Failed to create collection: {e}")
+        
         sys.exit(1)
 
 if __name__ == "__main__":

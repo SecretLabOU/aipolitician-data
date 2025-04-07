@@ -1,9 +1,8 @@
 # scripts/ingest_data.py
 import json
-import chromadb
-from chromadb.config import Settings
 import os
 import sys
+from chroma_config import get_chroma_client, print_collections, DB_DIR
 
 # Get the script's directory
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -12,38 +11,6 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
 # Default data file path - will be overridden by command line argument if provided
 DEFAULT_DATA_FILE = os.path.join(PROJECT_ROOT, "data", "sample_politician.json")
-
-# Database directory path
-DB_DIR = "/opt/chroma_db"
-
-def check_directory_access(directory):
-    """Check if the directory exists and is writable."""
-    # Check if directory exists
-    if not os.path.exists(directory):
-        try:
-            print(f"Directory {directory} does not exist. Attempting to create it...")
-            os.makedirs(directory, exist_ok=True)
-            print(f"Successfully created directory: {directory}")
-        except PermissionError:
-            print(f"Error: No permission to create directory {directory}")
-            print("Please create the directory manually or use a different path.")
-            print(f"You can run: sudo mkdir -p {directory} && sudo chown $USER:$USER {directory}")
-            return False
-    
-    # Check if directory is writable
-    if not os.access(directory, os.W_OK):
-        print(f"Error: No write permission for directory {directory}")
-        print(f"Please fix permissions with: sudo chown $USER:$USER {directory}")
-        return False
-    
-    return True
-
-def get_chroma_client():
-    return chromadb.Client(
-        Settings(
-            persist_directory=DB_DIR
-        )
-    )
 
 def ingest_politician(entry: dict, collection):
     """
@@ -112,11 +79,10 @@ def ingest_politician(entry: dict, collection):
     # ...
     
 def main():
-    # First, check directory access
-    if not check_directory_access(DB_DIR):
-        sys.exit(1)
-    
+    # Get the client from the shared config
     client = get_chroma_client()
+    
+    # Create or get the collection - use get_or_create to ensure it exists
     politicians_collection = client.get_or_create_collection("politicians")
     
     # Use command line argument if provided, otherwise use default
@@ -144,6 +110,9 @@ def main():
     # Data is automatically persisted when using persist_directory
     print(f"Ingested data from {data_file} successfully!")
     print(f"Database location: {DB_DIR}")
+    
+    # Show the available collections after ingestion
+    print_collections(client)
 
 if __name__ == "__main__":
     main()
