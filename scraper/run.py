@@ -17,47 +17,79 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 def check_dependencies():
-    """Check if all required packages are installed."""
+    """Check if all required packages are installed and working properly."""
     missing_packages = []
     
     # Check for required packages
     try:
         import scrapy
+        print(f"Scrapy version: {scrapy.__version__}")
     except ImportError:
         missing_packages.append("scrapy")
     
     try:
         import numpy
+        print(f"NumPy version: {numpy.__version__}")
     except ImportError:
         missing_packages.append("numpy")
     
     try:
         import requests
+        print(f"Requests version: {requests.__version__}")
     except ImportError:
         missing_packages.append("requests")
     
     try:
         import dotenv
+        print(f"python-dotenv version: {dotenv.__version__}")
     except ImportError:
         missing_packages.append("python-dotenv")
     
     # Try to import spacy, but it's optional (fallback available)
+    spacy_ok = False
     try:
         import spacy
+        print(f"spaCy version: {spacy.__version__}")
         has_spacy = True
+        
+        # Check if spaCy is properly loaded
+        try:
+            nlp = spacy.load("en_core_web_sm")
+            print("spaCy language model 'en_core_web_sm' loaded successfully")
+            spacy_ok = True
+        except OSError:
+            print("spaCy language model 'en_core_web_sm' is not installed")
+            missing_packages.append("spacy language model (en_core_web_sm)")
+            print("To install, run: python -m spacy download en_core_web_sm")
+        except Exception as e:
+            print(f"Error loading spaCy model: {str(e)}")
+            missing_packages.append(f"spaCy language model error: {str(e)}")
     except ImportError:
         has_spacy = False
         missing_packages.append("spacy (optional)")
     
-    # If spacy is available, check for language model
-    if has_spacy:
-        try:
-            spacy.load("en_core_web_sm")
-        except OSError:
-            missing_packages.append("spacy language model (en_core_web_sm)")
+    # Check data directory
+    try:
+        root_dir = Path(__file__).resolve().parent.parent
+        data_dir = root_dir / 'data'
+        print(f"Data directory: {data_dir.absolute()}")
+        
+        if not data_dir.exists():
+            print("Creating data directory...")
+            data_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Check if directory is writable
+        test_file = data_dir / "test_write.tmp"
+        with open(test_file, "w") as f:
+            f.write("Test write")
+        test_file.unlink()  # Delete the test file
+        print("Data directory is writable")
+    except Exception as e:
+        print(f"Error with data directory: {str(e)}")
+        missing_packages.append(f"data directory issue: {str(e)}")
     
     if missing_packages:
-        print("Warning: Some dependencies are missing:")
+        print("\nWarning: Some dependencies are missing or have issues:")
         for package in missing_packages:
             print(f"  - {package}")
         print("\nTo install missing dependencies, run:")
@@ -71,7 +103,7 @@ def check_dependencies():
                 print("Exiting.")
                 sys.exit(1)
     
-    return True
+    return spacy_ok or not has_spacy
 
 def validate_data(file_path):
     """Validate that the JSON file has the expected structure."""
@@ -100,7 +132,15 @@ def merge_data_files(politician_name):
     # Get the project root directory
     root_dir = Path(__file__).resolve().parent.parent
     data_dir = root_dir / 'data'
-    print(f"Looking for files in: {data_dir}")
+    print(f"Looking for files in: {data_dir.absolute()}")
+    
+    # Print list of all files in the data directory for debugging
+    if data_dir.exists():
+        print("Files in data directory:")
+        for file in data_dir.glob('*.json'):
+            print(f"  - {file.name}")
+    else:
+        print("Data directory does not exist yet")
     
     # Get all files that might be related to this politician
     # Create a simplified name for matching
@@ -180,7 +220,8 @@ def merge_data_files(politician_name):
 def run_spider(spider_name, args, script_dir):
     """Run a spider with proper error handling."""
     try:
-        cmd = ["scrapy", "crawl", spider_name] + args
+        # Use sys.executable to ensure we're using the same Python interpreter
+        cmd = [sys.executable, "-m", "scrapy", "crawl", spider_name] + args
         print(f"Running command: {' '.join(cmd)}")
         result = subprocess.run(cmd, cwd=script_dir, capture_output=True, text=True)
         
@@ -222,6 +263,12 @@ def main():
                         help="Use maximum settings for comprehensive data collection")
     
     args = parser.parse_args()
+    
+    # Print environment information
+    print(f"Current directory: {os.getcwd()}")
+    print(f"Python interpreter: {sys.executable}")
+    print(f"Python version: {sys.version}")
+    print(f"Script directory: {Path(__file__).resolve().parent}")
     
     # Check dependencies first
     check_dependencies()

@@ -2,7 +2,11 @@ import json
 import os
 import datetime
 import re
+import sys
 from pathlib import Path
+
+# Print debug information about the current Python interpreter
+print("Python interpreter is:", sys.executable)
 
 # Try to import spacy, but provide a fallback if it fails
 try:
@@ -20,6 +24,9 @@ class PoliticianPipeline:
         # Create data directory if it doesn't exist
         self.data_dir = Path(__file__).resolve().parents[2] / 'data'
         self.data_dir.mkdir(exist_ok=True)
+        
+        # Print the full path of the data directory for debugging
+        print(f"Data will be saved to: {self.data_dir.absolute()}")
         
         # Load spaCy model for text processing if available
         self.nlp = None
