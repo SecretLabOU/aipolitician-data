@@ -48,6 +48,7 @@ class PoliticianPipeline:
     
     def process_item(self, item, spider):
         """Process the scraped item and save it to a JSON file"""
+        print(f"Processing item: {item.get('name')}")
         # Clean text content
         if 'raw_content' in item:
             item['raw_content'] = self.clean_text(item['raw_content'])
@@ -75,6 +76,7 @@ class PoliticianPipeline:
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(dict(item), f, ensure_ascii=False, indent=2)
         
+        print(f"Saving to: {filepath}")
         spider.logger.info(f"Saved politician data to {filepath}")
         return item
     

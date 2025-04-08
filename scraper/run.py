@@ -98,8 +98,9 @@ def merge_data_files(politician_name):
     Merge multiple data files for the same politician into a single file.
     """
     # Get the project root directory
-    root_dir = Path(__file__).resolve().parent.parent
+    root_dir = Path(__file__).resolve().parent
     data_dir = root_dir / 'data'
+    print(f"Looking for files in: {data_dir}")
     
     # Get all files that might be related to this politician
     # Create a simplified name for matching
