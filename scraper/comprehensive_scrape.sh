@@ -12,9 +12,31 @@ fi
 echo "Checking Python environment..."
 python3 --version || { echo "Python 3 not found. Please install Python 3."; exit 1; }
 
-# Check for required packages
-pip3 list | grep -q scrapy || { echo "scrapy not found. Please install with: pip3 install scrapy"; exit 1; }
-pip3 list | grep -q "python-dotenv" || { echo "python-dotenv not found. Please install with: pip3 install python-dotenv"; exit 1; }
+# Detect if we're in a conda environment
+if [ -n "$CONDA_PREFIX" ]; then
+    echo "Conda environment detected: $CONDA_PREFIX"
+    # Use the conda environment's pip
+    PIP_CMD="$CONDA_PREFIX/bin/pip"
+    PYTHON_CMD="$CONDA_PREFIX/bin/python"
+else
+    # Use system pip
+    PIP_CMD="pip3"
+    PYTHON_CMD="python3"
+fi
+
+# Check for required packages using the appropriate Python
+echo "Checking for required packages..."
+$PYTHON_CMD -c "import scrapy" 2>/dev/null || { 
+    echo "scrapy not found. Please install with: $PIP_CMD install scrapy"; 
+    echo "If you're using conda, make sure to activate your environment first:";
+    echo "conda activate yourenvname";
+    exit 1; 
+}
+
+$PYTHON_CMD -c "import dotenv" 2>/dev/null || { 
+    echo "python-dotenv not found. Please install with: $PIP_CMD install python-dotenv";
+    exit 1; 
+}
 
 # Check for .env file
 if [ ! -f ../.env ] && [ ! -f .env ]; then
@@ -36,7 +58,7 @@ read -n 1 -s
 
 # Run the scraper with comprehensive settings
 echo "Starting comprehensive data collection..."
-python run.py --politician "$1" --comprehensive
+$PYTHON_CMD run.py --politician "$1" --comprehensive
 
 # Make the output file executable
 chmod +x comprehensive_scrape.sh

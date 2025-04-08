@@ -148,6 +148,16 @@ python run.py --politician "Politician Name" --comprehensive
 ./comprehensive_scrape.sh "Politician Name"
 ```
 
+If you're using a conda environment, make sure to activate it first:
+
+```bash
+# Activate your conda environment
+conda activate aipolitician
+
+# Then run the comprehensive script
+./comprehensive_scrape.sh "Politician Name"
+```
+
 This uses optimized settings:
 - 100 maximum news pages
 - 10-year time span for news
@@ -236,6 +246,13 @@ If no data is found:
 2. Validate your NewsAPI key
 3. Try with a well-known politician name (e.g., "Joe Biden", "Donald Trump")
 4. Run the diagnostic tool: `python diagnostic.py`
+
+### Conda Environment Issues
+
+If you see "package not found" errors when running scripts, but the packages are installed in your conda environment:
+1. Make sure you've activated your conda environment: `conda activate aipolitician`
+2. Run scripts with the full Python path: `$CONDA_PREFIX/bin/python script.py`
+3. For shell scripts like comprehensive_scrape.sh, activate the conda environment first, then run the script
 
 ### Permission Denied
 
