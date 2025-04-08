@@ -1,299 +1,194 @@
-import scrapy
 import re
-import urllib.parse
-from scrapy.exceptions import CloseSpider
+import scrapy
+import logging
+import wikipediaapi
+from urllib.parse import urlparse, unquote
 from ..items import PoliticianItem
 
-class WikipediaPoliticianSpider(scrapy.Spider):
-    name = "wikipedia_politician"
-    allowed_domains = ["en.wikipedia.org"]
+class WikipediaSpider(scrapy.Spider):
+    """
+    Spider for scraping politician data from Wikipedia.
     
-    def __init__(self, politician_name=None, follow_links=True, max_links=5, *args, **kwargs):
-        super(WikipediaPoliticianSpider, self).__init__(*args, **kwargs)
+    This spider extracts:
+    - Biographical information
+    - Political career details
+    - Speeches (when available)
+    - Statements/quotes
+    """
+    name = 'wikipedia'
+    
+    def __init__(self, politician=None, follow_links=True, max_links=5, *args, **kwargs):
+        super(WikipediaSpider, self).__init__(*args, **kwargs)
         
-        if not politician_name:
-            raise CloseSpider("Politician name is required. Use -a politician_name='Name'")
-        
-        # Convert follow_links to boolean
-        self.follow_links = str(follow_links).lower() in ['true', '1', 't', 'y', 'yes']
-        
-        # Convert max_links to int
-        try:
-            self.max_links = int(max_links)
-        except (ValueError, TypeError):
-            self.max_links = 5
+        if not politician:
+            raise ValueError("Politician name is required")
             
-        # Format the name for URL
-        self.politician_name = politician_name
+        self.politician = politician
+        self.follow_links = str(follow_links).lower() == 'true'
+        self.max_links = int(max_links)
         
-        # Create direct Wikipedia URL instead of search
-        formatted_name = politician_name.replace(' ', '_')
-        self.start_urls = [f"https://en.wikipedia.org/wiki/{urllib.parse.quote(formatted_name)}"]
+        # Configure logging
+        self.logger = logging.getLogger(self.name)
+        self.logger.setLevel(logging.INFO)
         
-        # Fallback to search page if direct access fails
-        self.search_url = f"https://en.wikipedia.org/wiki/Special:Search?search={urllib.parse.quote(politician_name)}&go=Go"
+        # Initialize Wikipedia API
+        self.wiki = wikipediaapi.Wikipedia('en')
         
-        self.logger.info(f"Starting for: {politician_name}")
-        self.logger.info(f"Start URL: {self.start_urls[0]}")
-        self.logger.info(f"Follow links: {self.follow_links}, Max links: {self.max_links}")
+        # Politician item that will be built as we scrape
+        self.politician_item = PoliticianItem()
+        self.politician_item['name'] = politician
+        self.politician_item['speeches'] = []
+        self.politician_item['statements'] = []
+        self.politician_item['links'] = []
         
-        # Keep track of visited pages to avoid cycles
-        self.visited_urls = set()
+        # Track visited pages to avoid loops
+        self.visited_pages = set()
         
-        # Store all collected data
-        self.main_item = None
-        self.all_speeches = []
-        self.all_statements = []
-        self.related_content = []
-        self.links_followed = 0
-    
-    def parse(self, response):
-        """
-        Parse the Wikipedia page or fallback to search if needed.
-        """
-        self.logger.info(f"Processing URL: {response.url}")
-        self.visited_urls.add(response.url)
+    def start_requests(self):
+        """Start by searching for the politician on Wikipedia."""
+        # Convert spaces to underscores for Wikipedia URLs
+        wiki_title = self.politician.replace(' ', '_')
+        url = f'https://en.wikipedia.org/wiki/{wiki_title}'
         
-        # Add debug information about what we're checking
-        self.logger.debug(f"DEBUG: Looking for #noarticletext element to check if page exists")
-        no_article_element = response.css("#noarticletext").get()
-        self.logger.debug(f"DEBUG: #noarticletext element found: {no_article_element is not None}")
+        # Start the crawl
+        yield scrapy.Request(url=url, callback=self.parse_politician_page)
         
-        # Check if we're on a valid page
-        page_exists = no_article_element is None
-        
-        if not page_exists:
-            self.logger.info(f"Page does not exist, trying search: {self.search_url}")
-            yield scrapy.Request(self.search_url, callback=self.parse_search_results)
-            return
-        
-        # Debug message before calling parse_politician_page
-        self.logger.debug(f"DEBUG: Page exists, calling parse_politician_page")    
-        
-        # We're on a valid page, continue with parsing
-        yield from self.parse_politician_page(response)
-        
-    def parse_search_results(self, response):
-        """Parse search results and follow the first result."""
-        self.logger.info(f"Processing search results: {response.url}")
-        
-        # Check for direct hit or search results
-        first_result = response.css(".mw-search-result-heading a::attr(href)").get()
-        
-        if first_result:
-            # Follow the first search result
-            self.logger.info(f"Found search result: {first_result}")
-            yield response.follow(first_result, self.parse_politician_page)
-        else:
-            # Check if we were redirected to the politician's page
-            title = response.css("h1#firstHeading::text").get()
-            if title:
-                self.logger.info(f"Redirected to page: {title}")
-                return self.parse_politician_page(response)
-            else:
-                self.logger.error(f"No results found for {self.politician_name}")
-                # Debug information about the page
-                self.logger.debug(f"Page title: {response.css('title::text').get()}")
-                self.logger.debug(f"Page content: {response.css('body').get()[:500]}...")
-    
     def parse_politician_page(self, response):
-        """Parse the politician's Wikipedia page."""
-        self.logger.info(f"Parsing politician page: {response.url}")
+        """Extract information from the politician's main Wikipedia page."""
+        url_path = urlparse(response.url).path
+        page_title = unquote(url_path.split('/')[-1]).replace('_', ' ')
         
-        # Create item on first page only
-        if self.main_item is None:
-            self.logger.debug("DEBUG: Creating new main item")
-            self.main_item = PoliticianItem()
-            # Basic information
-            title = response.css("h1#firstHeading::text").get()
-            self.logger.info(f"Found page title: {title}")
+        self.logger.info(f"Processing Wikipedia page: {page_title}")
+        
+        # Skip if we've already visited this page
+        if page_title in self.visited_pages:
+            return
             
-            self.main_item['name'] = title
-            self.main_item['source_url'] = response.url
+        self.visited_pages.add(page_title)
+        
+        # Set source URL if this is the main page
+        if not self.politician_item.get('source_url'):
+            self.politician_item['source_url'] = response.url
+        
+        # Extract text content from main article
+        main_content = response.css('#mw-content-text .mw-parser-output')
+        
+        # Extract the first paragraph as a summary
+        first_para = main_content.css('p:not(.mw-empty-elt)::text').getall()
+        first_para = ' '.join([p.strip() for p in first_para if p.strip()])
+        
+        # If this is the main page, capture the full content
+        if not self.politician_item.get('raw_content'):
+            # Combine all paragraphs as raw content
+            paragraphs = main_content.css('p:not(.mw-empty-elt)::text, p:not(.mw-empty-elt) *::text').getall()
+            raw_content = ' '.join([p.strip() for p in paragraphs if p.strip()])
+            self.politician_item['raw_content'] = raw_content
             
-            # Get the full name from the infobox if available
-            full_name = response.css("table.infobox th:contains('Born') + td::text").get()
-            if full_name:
-                self.logger.info(f"Found full name: {full_name}")
-                self.main_item['full_name'] = full_name.strip()
-            else:
-                self.logger.info(f"No full name found, using page title as full name")
-                self.main_item['full_name'] = title
-                
-            # Extract birth date
-            birth_date = response.css("table.infobox th:contains('Born') + td .bday::text").get()
+            # Try to extract birth date
+            birth_date = self.extract_birth_date(response)
             if birth_date:
-                self.logger.info(f"Found birth date: {birth_date}")
-                self.main_item['date_of_birth'] = birth_date
-            else:
-                self.logger.info("No birth date found")
+                self.politician_item['date_of_birth'] = birth_date
                 
-            # Extract political party
-            party = response.css("table.infobox th:contains('Political party') + td a::text").get()
-            if party:
-                self.logger.info(f"Found political party: {party}")
-                self.main_item['political_affiliation'] = party
-            else:
-                self.logger.info("No political party found")
+            # Try to extract political affiliation
+            affiliation = self.extract_political_affiliation(response)
+            if affiliation:
+                self.politician_item['political_affiliation'] = affiliation
         
-        # Get the main content from the current page
-        self.logger.debug("DEBUG: Extracting content paragraphs")
-        content_paragraphs = response.css("#mw-content-text .mw-parser-output > p").getall()
-        if content_paragraphs:
-            raw_content = "\n".join([self.clean_html(p) for p in content_paragraphs if p.strip()])
-            self.related_content.append(raw_content)
-            self.logger.info(f"Found raw content, length: {len(raw_content)} characters")
-        else:
-            self.logger.warning("No content paragraphs found")
+        # Extract statements/quotes (often in blockquotes or with quotation marks)
+        quotes = main_content.css('blockquote::text, blockquote *::text').getall()
+        quotes = [q.strip() for q in quotes if q.strip()]
         
-        # Extract list items that might contain policy positions
-        list_items = response.css("#mw-content-text .mw-parser-output > ul > li").getall()
-        if list_items:
-            for item in list_items:
-                clean_item = self.clean_html(item)
-                if clean_item and len(clean_item) > 20:  # Avoid tiny list items
-                    self.all_statements.append(clean_item)
+        # Also look for text in quotation marks
+        text_content = ' '.join(main_content.css('p::text, p *::text').getall())
+        quoted_text = re.findall(r'"([^"]*)"', text_content)
+        quoted_text += re.findall(r'"([^"]*)"', text_content)
+        quoted_text += re.findall(r"'([^']*)'", text_content)
         
-        # Extract speeches and statements
-        quotes = response.css("blockquote").getall()
-        for i, quote in enumerate(quotes):
-            clean_quote = self.clean_html(quote)
-            if clean_quote:
-                if len(clean_quote.split()) > 30:  # Longer quotes might be speeches
-                    self.all_speeches.append(clean_quote)
-                    self.logger.info(f"Found speech #{i+1}, length: {len(clean_quote)} characters")
-                else:
-                    self.all_statements.append(clean_quote)
-                    self.logger.info(f"Found statement #{i+1}, length: {len(clean_quote)} characters")
+        # Add found quotes to statements
+        for quote in quotes + quoted_text:
+            if len(quote) > 20 and quote not in self.politician_item['statements']:
+                self.politician_item['statements'].append(quote)
         
-        # Also check for statement sections like "Political positions" or "Views"
-        statement_sections = response.xpath('//span[@class="mw-headline" and contains(text(), "Position") or contains(text(), "View") or contains(text(), "Statement") or contains(text(), "Policy") or contains(text(), "Campaign") or contains(text(), "Platform")]/parent::*/following-sibling::p')
-        for i, section in enumerate(statement_sections):
-            clean_text = self.clean_html(section.get())
-            if clean_text:
-                self.all_statements.append(clean_text)
-                self.logger.info(f"Found position statement #{i+1}, length: {len(clean_text)} characters")
+        # Extract speeches (often in separate sections)
+        speech_headings = main_content.css('h2 span#Speeches, h3 span#Speeches, h2 span#Notable_speeches, h3 span#Notable_speeches')
+        if speech_headings:
+            # Find the section containing speeches
+            for heading in speech_headings:
+                section = heading.xpath('./parent::*/following-sibling::*')
+                for elem in section:
+                    if elem.root.tag == 'p':
+                        speech_text = ' '.join(elem.css('::text').getall()).strip()
+                        if speech_text and len(speech_text) > 50:
+                            self.politician_item['speeches'].append(speech_text)
+                    elif elem.root.tag in ['h2', 'h3', 'h4']:
+                        # Stop when we hit the next heading
+                        break
         
         # Follow links to related pages if enabled
-        if self.follow_links and self.links_followed < self.max_links:
-            # Find relevant links to follow
-            # Look specifically for links that might contain political information
-            relevant_sections = [
-                "Political positions", "Political views", "Presidency",
-                "Policy", "Campaign", "Electoral history", "Political career",
-                "Senate career", "Governorship", "Foreign policy", "Domestic policy"
-            ]
+        if self.follow_links and len(self.visited_pages) <= self.max_links:
+            # Look for links to pages about speeches, statements, politics, etc.
+            relevant_terms = ['speech', 'statement', 'address', 'political position', 
+                             'policy', 'platform', 'presidency', 'administration']
+                             
+            # Find links that might contain relevant information
+            links = main_content.css('a[href^="/wiki/"]')
             
-            # Build XPath to find links in sections with these titles
-            xpath_queries = []
-            for section in relevant_sections:
-                xpath_queries.append(f'//span[@class="mw-headline" and contains(text(), "{section}")]/parent::*/following-sibling::*/descendant::a[starts-with(@href, "/wiki/")]/@href')
-            
-            # Also look for links in the "See also" section
-            xpath_queries.append('//span[@class="mw-headline" and text()="See also"]/parent::*/following-sibling::ul/li/a[starts-with(@href, "/wiki/")]/@href')
-            
-            # Combine all the XPath queries
-            related_links = []
-            for query in xpath_queries:
-                links = response.xpath(query).getall()
-                if links:
-                    related_links.extend(links)
-            
-            # Make the list unique and filter out unwanted links
-            related_links = list(set(related_links))
-            filtered_links = []
-            for link in related_links:
-                full_url = response.urljoin(link)
-                if full_url not in self.visited_urls and not any(x in link for x in [':', 'File:', 'Category:', 'Help:', 'Wikipedia:']):
-                    filtered_links.append(link)
-            
-            # Follow a limited number of the most relevant links
-            for link in filtered_links[:self.max_links - self.links_followed]:
-                self.links_followed += 1
-                self.logger.info(f"Following related link {self.links_followed}: {link}")
-                yield response.follow(link, self.parse_related_page)
-            
-        # Final yield if this was the main page or if we've followed all links
-        self.logger.debug(f"DEBUG: Checking if we should yield the main item. Main URL: {self.main_item['source_url']}, Current URL: {response.url}")
-        self.logger.debug(f"DEBUG: Follow links: {self.follow_links}, Links followed: {self.links_followed}, Max links: {self.max_links}")
+            for link in links:
+                link_text = link.css('::text').get('').lower()
+                link_href = link.attrib.get('href', '')
+                
+                # Skip links to files, categories, help pages
+                if any(x in link_href for x in ['/File:', '/Category:', '/Help:', '/Wikipedia:']):
+                    continue
+                    
+                # Follow link if it contains relevant terms
+                if any(term in link_text.lower() for term in relevant_terms) and link_href.startswith('/wiki/'):
+                    full_url = response.urljoin(link_href)
+                    
+                    # Only follow if we haven't visited this page yet
+                    page_name = unquote(link_href.split('/')[-1]).replace('_', ' ')
+                    if page_name not in self.visited_pages:
+                        self.politician_item['links'].append(full_url)
+                        yield scrapy.Request(full_url, callback=self.parse_politician_page)
         
-        if response.url == self.main_item['source_url'] or (self.follow_links and self.links_followed >= self.max_links):
-            # Add all collected content to the main item
-            if self.related_content:
-                self.main_item['raw_content'] = "\n\n".join(self.related_content)
-            
-            if self.all_speeches:
-                self.main_item['speeches'] = self.all_speeches
-                self.logger.info(f"Total speeches found: {len(self.all_speeches)}")
-            else:
-                self.logger.info("No speeches found")
-            
-            if self.all_statements:
-                self.main_item['statements'] = self.all_statements
-                self.logger.info(f"Total statements found: {len(self.all_statements)}")
-            else:
-                self.logger.info("No statements found")
-            
-            # Log the complete item
-            self.logger.info(f"Created item with fields: {self.main_item.keys()}")
-            
-            # Debug if there's no data
-            if not self.main_item.get('raw_content') and not self.main_item.get('speeches') and not self.main_item.get('statements'):
-                self.logger.warning("Warning: No significant content extracted from the page")
-            
-            self.logger.debug("DEBUG: About to yield the main item")
-            yield self.main_item
-            self.logger.debug("DEBUG: Main item yielded")
+        # Return the constructed item
+        return self.politician_item
     
-    def parse_related_page(self, response):
-        """Parse related pages and extract additional content."""
-        self.logger.info(f"Parsing related page: {response.url}")
-        self.visited_urls.add(response.url)
-        
-        # Extract content from the page
-        title = response.css("h1#firstHeading::text").get()
-        self.logger.info(f"Related page title: {title}")
-        
-        # Get the main content
-        content_paragraphs = response.css("#mw-content-text .mw-parser-output > p").getall()
-        if content_paragraphs:
-            raw_content = "\n".join([self.clean_html(p) for p in content_paragraphs if p.strip()])
-            # Add a header to identify the source
-            self.related_content.append(f"From related article '{title}':\n{raw_content}")
-            self.logger.info(f"Found related content, length: {len(raw_content)} characters")
-        
-        # Extract speeches and statements
-        quotes = response.css("blockquote").getall()
-        for i, quote in enumerate(quotes):
-            clean_quote = self.clean_html(quote)
-            if clean_quote:
-                source_prefix = f"[From '{title}'] "
-                if len(clean_quote.split()) > 30:
-                    self.all_speeches.append(source_prefix + clean_quote)
-                else:
-                    self.all_statements.append(source_prefix + clean_quote)
-        
-        # Also look for policy positions and statements
-        statement_sections = response.xpath('//span[@class="mw-headline" and contains(text(), "Position") or contains(text(), "View") or contains(text(), "Statement") or contains(text(), "Policy")]/parent::*/following-sibling::p')
-        for section in statement_sections:
-            clean_text = self.clean_html(section.get())
-            if clean_text:
-                self.all_statements.append(f"[From '{title}'] {clean_text}")
-        
-        # We always return to the main parse function for final processing
-    
-    def clean_html(self, html_text):
-        """Remove HTML tags and clean the text."""
-        if not html_text:
-            return ""
+    def extract_birth_date(self, response):
+        """Extract birth date from the Wikipedia page."""
+        # Try different patterns for birth date
+        # Pattern 1: Infobox
+        birth_date = response.css('.infobox .bday::text').get()
+        if birth_date:
+            return birth_date
             
-        # Basic HTML tag removal (in a real implementation, use a proper HTML parser)
-        text = re.sub(r'<[^>]+>', ' ', html_text)
+        # Pattern 2: Regular text in first paragraphs
+        first_paras = ' '.join(response.css('p:not(.mw-empty-elt)::text').getall()[:3])
+        date_match = re.search(r'born (\w+ \d+, \d{4})', first_paras)
+        if date_match:
+            # Convert to YYYY-MM-DD format if possible
+            try:
+                from datetime import datetime
+                date_obj = datetime.strptime(date_match.group(1), '%B %d, %Y')
+                return date_obj.strftime('%Y-%m-%d')
+            except:
+                return date_match.group(1)
+                
+        return None
         
-        # Remove citation brackets like [1], [2], etc.
-        text = re.sub(r'\[\d+\]', '', text)
-        
-        # Remove extra whitespace
-        text = re.sub(r'\s+', ' ', text)
-        
-        return text.strip() 
+    def extract_political_affiliation(self, response):
+        """Extract political party affiliation from the Wikipedia page."""
+        # Try to find political party in infobox
+        party_label = response.css('.infobox th:contains("Political party"), .infobox th:contains("Party")')
+        if party_label:
+            party = party_label.xpath('./following-sibling::td[1]//text()').getall()
+            party = ' '.join([p.strip() for p in party if p.strip()])
+            return party
+            
+        # Try to find in text
+        first_paras = ' '.join(response.css('p:not(.mw-empty-elt)::text').getall()[:5])
+        party_match = re.search(r'(Democratic Party|Republican Party|Democratic|Republican|Independent)', first_paras)
+        if party_match:
+            return party_match.group(1)
+            
+        return None 

@@ -1,130 +1,92 @@
-import json
+# Define item pipelines here
 import os
-import datetime
-import re
-import sys
+import json
+import logging
+from datetime import datetime
 from pathlib import Path
 
-# Print debug information about the current Python interpreter
-print("Python interpreter is:", sys.executable)
-
-# Try to import spacy, but provide a fallback if it fails
-try:
-    import spacy
-    SPACY_AVAILABLE = True
-    print("spaCy library found and imported successfully.")
-except ImportError:
-    print("Warning: spaCy is not available. Text processing will be limited.")
-    SPACY_AVAILABLE = False
-
-class PoliticianPipeline:
-    """Pipeline for processing and saving politician data"""
+class PoliticianDataPipeline:
+    """
+    Pipeline for processing politician data.
+    1. Cleans and processes the text data
+    2. Saves the results to JSON files in the data directory
+    """
     
     def __init__(self):
+        # Get the project root directory
+        self.project_dir = Path(__file__).parent.parent.parent
+        self.data_dir = self.project_dir / 'data'
+        
         # Create data directory if it doesn't exist
-        self.data_dir = Path(__file__).resolve().parents[2] / 'data'
-        self.data_dir.mkdir(exist_ok=True)
-        
-        # Print the full path of the data directory for debugging
-        print(f"Data will be saved to: {self.data_dir.absolute()}")
-        
-        # Load spaCy model for text processing if available
-        self.nlp = None
-        if SPACY_AVAILABLE:
-            try:
-                self.nlp = spacy.load("en_core_web_sm")
-                print("Loaded spaCy model successfully.")
-            except OSError as e:
-                print(f"Error loading spaCy model: {str(e)}")
-                try:
-                    print("Attempting to download spaCy model...")
-                    # Try to download the model
-                    from spacy.cli import download
-                    download("en_core_web_sm")
-                    # Try loading again
-                    self.nlp = spacy.load("en_core_web_sm")
-                    print("Downloaded and loaded spaCy model successfully.")
-                except Exception as e:
-                    print(f"Could not download spaCy model: {str(e)}")
-                    print("Falling back to basic text processing.")
-            except Exception as e:
-                print(f"Unexpected error with spaCy: {str(e)}")
-                print("Falling back to basic text processing.")
-        else:
-            print("spaCy not available, using basic text processing only.")
+        if not self.data_dir.exists():
+            self.data_dir.mkdir(parents=True)
+            
+        # Set up logging
+        self.logger = logging.getLogger('PoliticianDataPipeline')
     
     def process_item(self, item, spider):
-        """Process the scraped item and save it to a JSON file"""
-        print(f"Processing item: {item.get('name')}")
-        # Clean text content
-        if 'raw_content' in item:
-            item['raw_content'] = self.clean_text(item['raw_content'])
-        
-        # Process speeches list
-        if 'speeches' in item and isinstance(item['speeches'], list):
-            item['speeches'] = [self.clean_text(speech) for speech in item['speeches'] if speech]
-        
-        # Process statements list
-        if 'statements' in item and isinstance(item['statements'], list):
-            item['statements'] = [self.clean_text(statement) for statement in item['statements'] if statement]
-        
-        # Generate ID from politician name if not provided
+        """Process each scraped item."""
+        # Ensure key fields are present
+        if not item.get('name'):
+            self.logger.warning("Item missing required 'name' field. Skipping.")
+            return item
+            
+        # Generate ID if not present
         if not item.get('id'):
-            item['id'] = self.generate_id_from_name(item.get('name', 'unknown'))
-        
-        # Add timestamp if not provided
+            normalized_name = item.get('name', '').lower().replace(' ', '-')
+            current_date = datetime.now().strftime('%Y%m%d')
+            item['id'] = f"{normalized_name}-{current_date}"
+            
+        # Add timestamp
         if not item.get('timestamp'):
-            item['timestamp'] = datetime.datetime.now().isoformat()
+            item['timestamp'] = datetime.now().isoformat()
+            
+        # Clean text fields
+        self._clean_text_fields(item)
         
-        # Save to file
-        filename = f"{item['id']}.json"
-        filepath = self.data_dir / filename
+        # Save to JSON file
+        self._save_to_json(item)
         
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(dict(item), f, ensure_ascii=False, indent=2)
-        
-        print(f"Saving to: {filepath}")
-        spider.logger.info(f"Saved politician data to {filepath}")
         return item
     
-    def clean_text(self, text):
-        """Clean and normalize text using spaCy if available, otherwise use basic cleaning"""
-        if not text:
-            return ""
-        
-        # Basic cleanup
-        text = re.sub(r'\s+', ' ', text)  # Replace multiple spaces with single space
-        text = text.strip()
-        
-        # Use spaCy for more advanced text cleaning if available
-        if self.nlp:
-            try:
-                doc = self.nlp(text)
-                # Remove emails, URLs, and other non-relevant information
-                cleaned_tokens = [token.text for token in doc if not token.like_email and not token.like_url]
-                return " ".join(cleaned_tokens)
-            except Exception as e:
-                print(f"Error during spaCy processing: {str(e)}")
-                # Fall back to basic cleaning if spaCy fails
+    def _clean_text_fields(self, item):
+        """Clean and normalize text fields in the item."""
+        # Clean text values (basic normalization)
+        for field in ['raw_content', 'full_name', 'political_affiliation']:
+            if field in item and item[field] and isinstance(item[field], str):
+                # Remove excessive whitespace
+                item[field] = ' '.join(item[field].split())
                 
-        # Fallback: just use regex for basic cleaning
-        # Remove citation brackets like [1], [2], etc.
-        text = re.sub(r'\[\d+\]', '', text)
-        # Try to remove URLs with a simple regex
-        text = re.sub(r'https?://\S+', '', text)
-        # Remove email addresses
-        text = re.sub(r'\S+@\S+', '', text)
-        
-        return text
+        # Clean list fields
+        for field in ['speeches', 'statements', 'public_tweets', 'interviews', 
+                      'press_releases', 'voting_record', 'sponsored_bills']:
+            if field in item and item[field]:
+                # Ensure it's a list
+                if not isinstance(item[field], list):
+                    item[field] = [item[field]]
+                    
+                # Clean each text item in the list
+                item[field] = [' '.join(text.split()) for text in item[field] if text]
+                
+                # Remove empty items
+                item[field] = [text for text in item[field] if text]
     
-    def generate_id_from_name(self, name):
-        """Generate a URL-friendly ID from the politician's name"""
-        # Convert to lowercase and replace spaces with hyphens
-        name_id = name.lower().replace(' ', '-')
-        
-        # Remove special characters
-        name_id = re.sub(r'[^a-z0-9-]', '', name_id)
-        
-        # Add timestamp to ensure uniqueness
-        timestamp = datetime.datetime.now().strftime("%Y%m%d")
-        return f"{name_id}-{timestamp}" 
+    def _save_to_json(self, item):
+        """Save the processed item to a JSON file."""
+        try:
+            # Convert item to dict
+            item_dict = dict(item)
+            
+            # Define file path
+            file_path = self.data_dir / f"{item['id']}.json"
+            
+            # Save to file
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(item_dict, f, ensure_ascii=False, indent=2)
+                
+            self.logger.info(f"Saved data for {item.get('name')} to {file_path}")
+            
+        except Exception as e:
+            self.logger.error(f"Error saving data: {e}")
+            
+        return item 

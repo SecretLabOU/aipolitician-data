@@ -1,210 +1,226 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
-Simplified scraper for collecting politician data.
-This version doesn't require spaCy or other advanced dependencies.
+Simple politician data scraper
 
-Usage:
-    python simple_scrape.py --politician "Politician Name"
+A lightweight alternative to the full scraper, with minimal dependencies.
+This script only requires the requests library.
 """
 
+import os
+import re
+import json
 import argparse
 import requests
-import json
-import re
-import datetime
-import os
-import sys
-from pathlib import Path
-import urllib.parse
+from datetime import datetime
+from urllib.parse import quote, urlparse
 
-def clean_html(html_text):
-    """Simple function to remove HTML tags and clean text"""
-    if not html_text:
-        return ""
-        
-    # Remove HTML tags
-    text = re.sub(r'<[^>]+>', ' ', html_text)
+def setup_argparse():
+    """Set up command line arguments."""
+    parser = argparse.ArgumentParser(description='Simple politician data scraper')
+    parser.add_argument('--politician', '-p', required=True, help='Name of the politician to scrape')
+    parser.add_argument('--output-dir', '-o', default='../data', help='Directory to save output')
+    parser.add_argument('--skip-news', action='store_true', help='Skip news search')
     
-    # Remove citation brackets like [1], [2], etc.
-    text = re.sub(r'\[\d+\]', '', text)
-    
-    # Remove extra whitespace
-    text = re.sub(r'\s+', ' ', text)
-    
-    return text.strip()
+    return parser.parse_args()
+
+def create_output_dir(output_dir):
+    """Create output directory if it doesn't exist."""
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        print(f"Created output directory: {output_dir}")
 
 def scrape_wikipedia(politician_name):
-    """Scrape basic information about a politician from Wikipedia"""
-    print(f"Searching Wikipedia for: {politician_name}")
+    """Scrape Wikipedia for politician information."""
+    print(f"Scraping Wikipedia for: {politician_name}")
     
-    # Format the name for URL
-    query = urllib.parse.quote(politician_name)
-    search_url = f"https://en.wikipedia.org/w/api.php?action=opensearch&search={query}&limit=1&format=json"
+    # Format the name for Wikipedia URL
+    wiki_name = quote(politician_name.replace(' ', '_'))
+    url = f"https://en.wikipedia.org/wiki/{wiki_name}"
     
     try:
-        # Search for the politician
-        print(f"Requesting search results from: {search_url}")
-        search_response = requests.get(search_url)
-        search_data = search_response.json()
+        response = requests.get(url, headers={'User-Agent': 'Simple Politician Scraper/1.0'})
+        response.raise_for_status()  # Raise exception for 404s etc.
         
-        print(f"Search response: {search_data}")
+        html = response.text
         
-        if not search_data[3] or len(search_data[3]) == 0:
-            print(f"No Wikipedia page found for {politician_name}")
-            return None
-            
-        # Get the first result URL
-        page_url = search_data[3][0]
-        print(f"Found Wikipedia page: {page_url}")
+        # Extract data using simple regex patterns (not as robust as BeautifulSoup but works for basic extraction)
         
-        # Get the page title from the URL
-        page_title = page_url.split('/')[-1].replace('_', ' ')
-        print(f"Page title: {page_title}")
+        # Get main content
+        main_content_match = re.search(r'<div id="mw-content-text".*?>(.*?)<div class="printfooter">', html, re.DOTALL)
+        main_content = main_content_match.group(1) if main_content_match else ""
         
-        # Get the content of the page using the Wikipedia API
-        api_url = f"https://en.wikipedia.org/w/api.php?action=query&prop=extracts|pageimages|info&exintro=1&inprop=url&titles={urllib.parse.quote(page_title)}&format=json&explaintext=1"
-        print(f"Requesting page content from: {api_url}")
+        # Clean HTML tags
+        cleaned_content = re.sub(r'<.*?>', ' ', main_content)
+        cleaned_content = re.sub(r'\s+', ' ', cleaned_content).strip()
         
-        content_response = requests.get(api_url)
-        content_data = content_response.json()
+        # Extract infobox info
+        political_party = None
+        party_match = re.search(r'Political party</th>.*?<td.*?>(.*?)</td>', html, re.DOTALL)
+        if party_match:
+            political_party = re.sub(r'<.*?>', '', party_match.group(1)).strip()
         
-        # Extract the page content
-        pages = content_data['query']['pages']
-        if not pages:
-            print("No page content found")
-            return None
-            
-        page_id = list(pages.keys())[0]
-        page_info = pages[page_id]
+        # Extract birth date
+        birth_date = None
+        birth_match = re.search(r'Born</th>.*?<span class="bday">(\d{4}-\d{2}-\d{2})', html, re.DOTALL)
+        if birth_match:
+            birth_date = birth_match.group(1)
         
-        # Check if page exists
-        if 'missing' in page_info:
-            print(f"Page {page_title} does not exist")
-            return None
-            
-        # Extract basic information
-        raw_content = page_info.get('extract', '')
-        full_url = page_info.get('fullurl', page_url)
+        # Extract quotes
+        quotes = []
+        quote_matches = re.findall(r'<blockquote.*?>(.*?)</blockquote>', html, re.DOTALL)
+        for quote in quote_matches:
+            cleaned_quote = re.sub(r'<.*?>', ' ', quote)
+            cleaned_quote = re.sub(r'\s+', ' ', cleaned_quote).strip()
+            if len(cleaned_quote) > 20:
+                quotes.append(cleaned_quote)
         
-        print(f"Retrieved {len(raw_content)} characters of content")
+        # Also extract quoted text in paragraphs
+        paragraph_quotes = re.findall(r'"([^"]{20,})"', cleaned_content)
+        quotes.extend(paragraph_quotes)
         
-        # Try to find political party affiliation using another API call
-        party_url = f"https://en.wikipedia.org/w/api.php?action=parse&page={urllib.parse.quote(page_title)}&prop=text&section=0&format=json"
-        print(f"Requesting infobox from: {party_url}")
-        
-        try:
-            party_response = requests.get(party_url)
-            party_data = party_response.json()
-            
-            # Extract political party from infobox if it exists
-            if 'parse' in party_data and 'text' in party_data['parse']:
-                html_content = party_data['parse']['text']['*']
-                
-                # Look for political party in the infobox
-                party_match = re.search(r'Political party</th[^>]*><td[^>]*>(.*?)</td>', html_content)
-                political_affiliation = ''
-                
-                if party_match:
-                    # Clean up HTML tags
-                    political_affiliation = clean_html(party_match.group(1))
-                    print(f"Found political affiliation: {political_affiliation}")
-                else:
-                    print("Political affiliation not found in infobox")
-            else:
-                political_affiliation = ''
-                print("Couldn't extract infobox data")
-        except Exception as e:
-            political_affiliation = ''
-            print(f"Error extracting political party: {str(e)}")
-        
-        # Create a politician data object
-        politician_data = {
-            "id": generate_id_from_name(politician_name),
-            "name": page_title,
-            "source_url": full_url,
-            "raw_content": raw_content,
-            "political_affiliation": political_affiliation,
-            "speeches": [],
-            "statements": [],
-            "timestamp": datetime.datetime.now().isoformat()
+        return {
+            "raw_content": cleaned_content[:10000],  # Limit length to avoid excessive data
+            "political_affiliation": political_party,
+            "date_of_birth": birth_date,
+            "statements": quotes[:50],  # Limit to 50 quotes
+            "source_url": url
         }
-        
-        # Try to extract some statements from the content
-        # This is a very simple approach - just looking for quoted text
-        quote_pattern = re.compile(r'"([^"]{10,})"')
-        quotes = quote_pattern.findall(raw_content)
-        
-        if quotes:
-            politician_data["statements"] = quotes[:5]  # Take up to 5 quotes
-            print(f"Found {len(quotes)} potential statements/quotes")
-        
-        return politician_data
+    
     except Exception as e:
-        print(f"Error scraping Wikipedia: {str(e)}")
-        return None
+        print(f"Error scraping Wikipedia: {e}")
+        return {
+            "raw_content": f"Error scraping Wikipedia: {e}",
+            "source_url": url
+        }
 
-def generate_id_from_name(name):
-    """Generate a URL-friendly ID from the politician's name"""
-    # Convert to lowercase and replace spaces with hyphens
-    name_id = name.lower().replace(' ', '-')
+def scrape_news(politician_name, api_key=None):
+    """Fetch recent news about the politician."""
+    print(f"Searching for news about: {politician_name}")
     
-    # Remove special characters
-    name_id = re.sub(r'[^a-z0-9-]', '', name_id)
+    # Use News API if key is available
+    if api_key:
+        print("Using News API for better results")
+        return scrape_with_news_api(politician_name, api_key)
     
-    # Add timestamp to ensure uniqueness
-    timestamp = datetime.datetime.now().strftime("%Y%m%d")
-    return f"{name_id}-{timestamp}"
-
-def save_data(data, politician_name):
-    """Save the politician data to a JSON file"""
-    # Get the project root directory and create data directory if needed
-    root_dir = Path(__file__).resolve().parent.parent
-    data_dir = root_dir / 'data'
-    data_dir.mkdir(exist_ok=True)
+    # Fallback to a simple Google News search
+    print("News API key not provided, falling back to Google News")
     
-    # Create a filename based on the politician's name
-    simplified_name = politician_name.lower().replace(' ', '-')
-    filename = f"{simplified_name}.json"
-    filepath = data_dir / filename
+    # Format for URL
+    query = quote(politician_name)
+    url = f"https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
     
-    # Save the data to a file
-    with open(filepath, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
         
-    print(f"Saved politician data to {filepath}")
-    return filepath
+        xml = response.text
+        
+        # Extract titles and descriptions using regex
+        titles = re.findall(r'<title><!\[CDATA\[(.*?)\]\]></title>', xml)
+        
+        # Skip the first title as it's usually the feed title
+        news_statements = titles[1:21] if len(titles) > 1 else []
+        
+        return {
+            "statements": news_statements,
+            "source_url": f"https://news.google.com/search?q={query}"
+        }
+    
+    except Exception as e:
+        print(f"Error scraping news: {e}")
+        return {
+            "statements": [f"Error scraping news: {e}"],
+            "source_url": url
+        }
+
+def scrape_with_news_api(politician_name, api_key):
+    """Use the News API for better news results."""
+    url = f"https://newsapi.org/v2/everything?q={quote(politician_name)}&language=en&sortBy=relevancy&apiKey={api_key}"
+    
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        if data.get('status') != 'ok':
+            raise Exception(data.get('message', 'Unknown error'))
+        
+        # Extract article titles and descriptions
+        articles = data.get('articles', [])
+        statements = []
+        
+        for article in articles[:30]:  # Limit to first 30 articles
+            title = article.get('title', '')
+            description = article.get('description', '')
+            
+            if title and len(title) > 10:
+                statements.append(title)
+            if description and len(description) > 20:
+                statements.append(description)
+        
+        return {
+            "statements": statements,
+            "source_url": url
+        }
+    
+    except Exception as e:
+        print(f"Error with News API: {e}")
+        return {
+            "statements": [f"Error with News API: {e}"],
+            "source_url": url
+        }
 
 def main():
-    parser = argparse.ArgumentParser(description="Simple Political Data Scraper")
-    parser.add_argument('--politician', type=str, required=True, 
-                        help="Name of the politician to scrape data for")
-    parser.add_argument('--verbose', '-v', action='store_true',
-                        help="Show more detailed output")
+    """Main function to run the scraper."""
+    # Parse command line arguments
+    args = setup_argparse()
     
-    args = parser.parse_args()
+    # Create output directory
+    create_output_dir(args.output_dir)
     
-    print(f"Starting simple data collection for {args.politician}...")
+    # Generate a unique filename
+    normalized_name = args.politician.lower().replace(' ', '-')
+    timestamp = datetime.now().strftime('%Y%m%d')
+    filename = f"{normalized_name}-{timestamp}.json"
+    output_path = os.path.join(args.output_dir, filename)
     
-    # Check for requests module
-    try:
-        import requests
-    except ImportError:
-        print("Error: The 'requests' module is required for this script.")
-        print("Please install it using: pip install requests")
-        sys.exit(1)
+    # Initialize the result dictionary
+    result = {
+        "id": f"{normalized_name}-{timestamp}",
+        "name": args.politician,
+        "timestamp": datetime.now().isoformat()
+    }
     
     # Scrape Wikipedia
-    politician_data = scrape_wikipedia(args.politician)
+    wiki_data = scrape_wikipedia(args.politician)
+    result.update(wiki_data)
     
-    if politician_data:
-        # Save the data
-        save_data(politician_data, args.politician)
-        print("\nData collection completed successfully!")
-        print(f"Fields collected: {', '.join(politician_data.keys())}")
-        print(f"Content length: {len(politician_data.get('raw_content', ''))} characters")
-        print(f"Statements found: {len(politician_data.get('statements', []))}")
-    else:
-        print("\nData collection failed. No information could be retrieved.")
-
+    # Scrape news if not skipped
+    if not args.skip_news:
+        # Try to get API key from environment
+        api_key = os.environ.get('NEWS_API_KEY')
+        
+        news_data = scrape_news(args.politician, api_key)
+        
+        # Merge statements from news with any existing statements
+        if 'statements' not in result:
+            result['statements'] = []
+        
+        result['statements'].extend(news_data.get('statements', []))
+    
+    # Save to JSON file
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(result, f, indent=2)
+    
+    print(f"Data saved to: {output_path}")
+    print(f"Found {len(result.get('statements', []))} statements/quotes")
+    print(f"Raw content length: {len(result.get('raw_content', ''))}")
+    
+    # Suggest next steps
+    print("\nNext Steps:")
+    print(f"1. Run the data ingestion script: python ../scripts/ingest_data.py {output_path}")
+    print(f"2. Query the data: python ../scripts/query_data.py")
+    
 if __name__ == "__main__":
     main() 

@@ -1,50 +1,33 @@
-BOT_NAME = "politician_scraper"
+# Scrapy settings for the AI Politician scraper
 
-SPIDER_MODULES = ["scraper.spiders"]
-NEWSPIDER_MODULE = "scraper.spiders"
+BOT_NAME = 'aipolitician'
 
-# Obey robots.txt rules
-ROBOTSTXT_OBEY = False
+SPIDER_MODULES = ['scraper.spiders']
+NEWSPIDER_MODULE = 'scraper.spiders'
+
+# Respect robots.txt
+ROBOTSTXT_OBEY = True
 
 # Configure maximum concurrent requests
-CONCURRENT_REQUESTS = 16
+CONCURRENT_REQUESTS = 8
 
-# Configure a delay for requests for the same website (default: 0)
-DOWNLOAD_DELAY = 1
+# Configure a delay for requests (in seconds)
+DOWNLOAD_DELAY = 2
+RANDOMIZE_DOWNLOAD_DELAY = True
 
-# Disable cookies (enabled by default)
+# Disable cookies
 COOKIES_ENABLED = False
+
+# Set the user agent
+USER_AGENT = 'AI Politician Data Scraper (https://github.com/nataliehill/aipolitician-data)'
 
 # Configure item pipelines
 ITEM_PIPELINES = {
-    "scraper.pipelines.PoliticianPipeline": 300,
+   'scraper.pipelines.PoliticianDataPipeline': 300,
 }
 
-# Configure logging level - set to DEBUG for more detailed output
-LOG_LEVEL = 'DEBUG'
+# Enable and configure logging
+LOG_LEVEL = 'INFO'
 
-# Use absolute path for data directory
-import os
-from pathlib import Path
-DATA_DIR = Path(__file__).resolve().parents[2] / 'data'
-# Create the data directory if it doesn't exist
-DATA_DIR.mkdir(exist_ok=True)
-
-# Configure output directory for scraped files
-FILES_STORE = str(DATA_DIR)
-
-# Save items directly to JSON files
-FEEDS = {
-    str(DATA_DIR / '%(name)s_%(time)s.json'): {
-        'format': 'json',
-        'encoding': 'utf8',
-        'store_empty': False,
-        'fields': None,
-        'indent': 4,
-    },
-}
-
-# Set settings whose default value is deprecated to a future-proof value
-REQUEST_FINGERPRINTER_IMPLEMENTATION = "2.7"
-TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
-FEED_EXPORT_ENCODING = "utf-8" 
+# Configure maximum depth for following links
+DEPTH_LIMIT = 5 

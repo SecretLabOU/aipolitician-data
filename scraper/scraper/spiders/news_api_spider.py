@@ -1,164 +1,177 @@
-import scrapy
-import json
-import datetime
 import os
-import time
-from scrapy.exceptions import CloseSpider
-from ..items import PoliticianItem
+import json
+import scrapy
+import logging
+from datetime import datetime, timedelta
+from newsapi import NewsApiClient
 from dotenv import load_dotenv
+from ..items import PoliticianItem
 
 class NewsApiSpider(scrapy.Spider):
-    name = "news_api"
+    """
+    Spider for fetching news articles about politicians using the News API.
     
-    def __init__(self, politician_name=None, api_key=None, max_pages=10, time_span=365, *args, **kwargs):
+    This spider extracts:
+    - Recent news articles
+    - Quotes and statements from news sources
+    - Headlines and summaries
+    """
+    name = 'newsapi'
+    
+    def __init__(self, politician=None, api_key=None, max_pages=10, time_span=365, *args, **kwargs):
         super(NewsApiSpider, self).__init__(*args, **kwargs)
         
-        if not politician_name:
-            raise CloseSpider("Politician name is required. Use -a politician_name='Name'")
-        
-        # Convert max_pages to int if provided as string
-        try:
-            self.max_pages = int(max_pages)
-        except (ValueError, TypeError):
-            self.max_pages = 10  # Default to 10 pages
+        if not politician:
+            raise ValueError("Politician name is required")
             
-        # Convert time_span to int if provided as string
-        try:
-            self.time_span = int(time_span)
-        except (ValueError, TypeError):
-            self.time_span = 365  # Default to 1 year
+        self.politician = politician
+        self.max_pages = int(max_pages)
+        self.time_span = int(time_span)
         
-        # Try to load API key from .env file if not provided as argument
-        if not api_key:
-            # Load environment variables from .env file
-            try:
-                # Look for .env in the project root directory
-                env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), '.env')
-                load_dotenv(env_path)
-                
-                # Try to get the API key from environment variables
-                api_key = os.getenv('NEWS_API_KEY')
-                
-                if api_key:
-                    self.logger.info("Using API key from .env file")
-                else:
-                    self.logger.warning("No API key found in .env file. Using free limited NewsAPI access.")
-            except Exception as e:
-                self.logger.error(f"Error loading .env file: {str(e)}")
-                api_key = None
+        # Set up logging
+        self.logger = logging.getLogger(self.name)
+        self.logger.setLevel(logging.INFO)
         
-        # Set API usage flag based on whether we have an API key
-        if api_key:
-            self.use_api = True
-            self.api_key = api_key
-            self.logger.info(f"Using NewsAPI with max pages: {self.max_pages}, time span: {self.time_span} days")
-        else:
-            self.logger.warning("No API key provided. Using free limited NewsAPI access.")
-            self.use_api = False
+        # Load API key from arguments, environment, or .env file
+        self.api_key = api_key
+        if not self.api_key:
+            # Try to load from environment or .env file
+            load_dotenv()
+            self.api_key = os.getenv('NEWS_API_KEY')
             
-        # Format the query for news search
-        self.politician_name = politician_name
-        self.query = politician_name.replace(" ", "+")
+        if not self.api_key:
+            self.logger.error("News API key is required. Provide it as an argument or set it in the .env file.")
+            raise ValueError("News API key is required")
+            
+        # Initialize the News API client
+        self.news_api = NewsApiClient(api_key=self.api_key)
         
-        # Store all collected statements
-        self.all_statements = []
-        self.current_page = 1
+        # Initialize the politician item
+        self.politician_item = PoliticianItem()
+        self.politician_item['name'] = politician
+        self.politician_item['statements'] = []
+        self.politician_item['source_url'] = f"https://newsapi.org/v2/everything?q={politician.replace(' ', '+')}"
         
-        # Define start URLs based on availability of API key
-        if self.use_api:
-            # If we have an API key, use the NewsAPI
-            # Set a longer time span for more historical data
-            self.start_date = (datetime.datetime.now() - datetime.timedelta(days=self.time_span)).strftime("%Y-%m-%d")
-            self.start_urls = [
-                f"https://newsapi.org/v2/everything?q={self.query}&from={self.start_date}&sortBy=relevancy&apiKey={self.api_key}&pageSize=100&page=1"
-            ]
-        else:
-            # If no API key, use a fallback to Google News
-            self.start_urls = [
-                f"https://news.google.com/search?q={self.query}"
-            ]
+        # Generate a unique ID for the news data
+        timestamp = datetime.now().strftime('%Y-%m-%dT%H-%M-%S+00-00')
+        self.politician_item['id'] = f"{politician.lower().replace(' ', '-')}-{datetime.now().strftime('%Y%m%d')}"
+        
+        # Store the timestamp
+        self.politician_item['timestamp'] = datetime.now().isoformat()
+        
+    def start_requests(self):
+        """Fetch news articles about the politician."""
+        self.logger.info(f"Fetching news for politician: {self.politician}")
+        
+        # Calculate the date range (from days_ago to today)
+        from_date = (datetime.now() - timedelta(days=self.time_span)).strftime('%Y-%m-%d')
+        
+        # We'll make a fake request to satisfy Scrapy's requirements
+        # The actual API calls will be made in the callback
+        url = f"https://newsapi.org/v2/everything?q={self.politician.replace(' ', '+')}&from={from_date}&sortBy=relevancy&apiKey={self.api_key}"
+        
+        # Make a fake request to pass to the callback
+        yield scrapy.Request(url=url, callback=self.parse_news_api_response)
     
-    def parse(self, response):
-        """Parse the news search results."""
-        if self.use_api:
-            # Parse NewsAPI JSON response
-            try:
-                data = json.loads(response.text)
-                if data.get('status') == 'ok':
-                    articles = data.get('articles', [])
-                    total_results = data.get('totalResults', 0)
+    def parse_news_api_response(self, response):
+        """Process the News API response."""
+        try:
+            # This is where we actually call the News API
+            # We're not using the response data from Scrapy
+            from_date = (datetime.now() - timedelta(days=self.time_span)).strftime('%Y-%m-%d')
+            
+            # Get top headlines first (more relevant but fewer results)
+            self.logger.info("Fetching top headlines...")
+            top_headlines = self.news_api.get_top_headlines(
+                q=self.politician,
+                language='en'
+            )
+            
+            # Process top headlines
+            if top_headlines.get('status') == 'ok':
+                self.process_articles(top_headlines.get('articles', []))
+            
+            # Then search for everything (more comprehensive)
+            self.logger.info("Fetching all articles...")
+            all_articles = self.news_api.get_everything(
+                q=self.politician,
+                from_param=from_date,
+                language='en',
+                sort_by='relevancy',
+                page_size=100,
+                page=1
+            )
+            
+            # Process all articles
+            if all_articles.get('status') == 'ok':
+                total_results = all_articles.get('totalResults', 0)
+                self.logger.info(f"Found {total_results} articles")
+                
+                # Process first page of results
+                self.process_articles(all_articles.get('articles', []))
+                
+                # Get additional pages if needed and available
+                max_pages = min(self.max_pages, (total_results // 100) + 1)
+                
+                for page in range(2, max_pages + 1):
+                    self.logger.info(f"Fetching page {page} of {max_pages}...")
+                    more_articles = self.news_api.get_everything(
+                        q=self.politician,
+                        from_param=from_date,
+                        language='en',
+                        sort_by='relevancy',
+                        page_size=100,
+                        page=page
+                    )
                     
-                    self.logger.info(f"Page {self.current_page}: Found {len(articles)} articles out of {total_results} total results")
-                    
-                    for article in articles:
-                        title = article.get('title', '')
-                        description = article.get('description', '')
-                        content = article.get('content', '')
-                        
-                        # Collect both title and description for more data
-                        if title and not title.endswith('...'):
-                            self.all_statements.append(title)
-                            
-                        if description and len(description) > 10:
-                            self.all_statements.append(description)
-                        elif content and len(content) > 10:
-                            # NewsAPI usually truncates content, but we'll use what we have
-                            self.all_statements.append(content)
-                    
-                    # Check if we can fetch the next page
-                    if self.current_page < self.max_pages and articles:
-                        self.current_page += 1
-                        next_page_url = f"https://newsapi.org/v2/everything?q={self.query}&from={self.start_date}&sortBy=relevancy&apiKey={self.api_key}&pageSize=100&page={self.current_page}"
-                        
-                        self.logger.info(f"Requesting next page: {self.current_page}")
-                        # Add a small delay to avoid hitting rate limits
-                        time.sleep(1)
-                        yield scrapy.Request(next_page_url, callback=self.parse)
+                    if more_articles.get('status') == 'ok':
+                        self.process_articles(more_articles.get('articles', []))
                     else:
-                        # We've reached the maximum pages or no more articles
-                        self.logger.info(f"Completed fetching {self.current_page} pages with {len(self.all_statements)} statements")
-                        yield self.create_item()
-                else:
-                    self.logger.error(f"NewsAPI error: {data.get('message')}")
-                    yield self.create_item()
-            except json.JSONDecodeError:
-                self.logger.error("Failed to parse NewsAPI response")
-                yield self.create_item()
-        else:
-            # Parse Google News results
-            articles = response.css("article")
-            for article in articles:
-                title = article.css("h3 a::text").get()
-                snippet = article.css(".HO8did::text").get()
-                
-                if title:
-                    self.all_statements.append(title)
-                    
-                if snippet and len(snippet) > 10:
-                    self.all_statements.append(snippet)
+                        self.logger.warning(f"Failed to fetch page {page}: {more_articles.get('message', 'Unknown error')}")
+                        break
             
-            yield self.create_item()
+            # Save the results for debugging
+            self.save_debug_data(all_articles)
+            
+            # Return the item with collected statements
+            return self.politician_item
+            
+        except Exception as e:
+            self.logger.error(f"Error fetching news data: {str(e)}")
+            # Still return the item with whatever data was collected
+            return self.politician_item
     
-    def create_item(self):
-        """Create the final item with all collected statements."""
-        item = PoliticianItem()
-        item['name'] = self.politician_name
-        
-        if self.all_statements:
-            # Remove duplicates while preserving order
-            unique_statements = []
-            seen = set()
-            for statement in self.all_statements:
-                if statement not in seen:
-                    unique_statements.append(statement)
-                    seen.add(statement)
+    def process_articles(self, articles):
+        """Extract statements from articles."""
+        for article in articles:
+            # Get the content from the article
+            content = article.get('content', '')
+            description = article.get('description', '')
+            title = article.get('title', '')
             
-            item['statements'] = unique_statements
-            item['source_url'] = self.start_urls[0]
+            # Combine all text
+            full_text = ' '.join([text for text in [title, description, content] if text])
             
-            self.logger.info(f"Found {len(unique_statements)} unique news statements about {self.politician_name}")
-        else:
-            self.logger.warning(f"No news statements found for {self.politician_name}")
-            item['statements'] = []
+            # If the content is substantial, add it as a statement
+            if full_text and len(full_text) > 20:
+                self.politician_item['statements'].append(full_text)
+    
+    def save_debug_data(self, data):
+        """Save the API response for debugging purposes."""
+        try:
+            # Create a timestamp for the filename
+            timestamp = datetime.now().strftime('%Y-%m-%dT%H-%M-%S+00-00')
+            filename = f"news_api_{timestamp}.json"
             
-        return item 
+            # Use the same directory as other data files
+            file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 
+                                   'data', filename)
+            
+            # Save the data
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+                
+            self.logger.info(f"Saved debug data to {file_path}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to save debug data: {str(e)}") 

@@ -1,1 +1,1 @@
-# This directory is a Python package 
+# Scraper spiders package 
