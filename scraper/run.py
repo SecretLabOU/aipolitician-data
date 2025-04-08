@@ -209,6 +209,16 @@ def main():
                         help="Only check dependencies, don't run scrapers")
     parser.add_argument('--no-news', action='store_true',
                         help="Skip the news API spider")
+    parser.add_argument('--max-pages', type=int, default=10,
+                        help="Maximum number of news pages to fetch (default: 10)")
+    parser.add_argument('--time-span', type=int, default=365,
+                        help="Time span in days to fetch news for (default: 365 days)")
+    parser.add_argument('--follow-links', type=str, default='true', 
+                        help="Follow links from Wikipedia to related pages (default: true)")
+    parser.add_argument('--max-links', type=int, default=5,
+                        help="Maximum number of related links to follow (default: 5)")
+    parser.add_argument('--comprehensive', action='store_true',
+                        help="Use maximum settings for comprehensive data collection")
     
     args = parser.parse_args()
     
@@ -242,35 +252,43 @@ def main():
     # Ensure we're in the correct directory
     os.chdir(script_dir)
     
+    # If comprehensive flag is set, use maximum settings
+    if args.comprehensive:
+        print("Using comprehensive data collection settings")
+        args.max_pages = 100
+        args.time_span = 3650  # 10 years
+        args.follow_links = 'true'
+        args.max_links = 10
+    
     print(f"Starting data collection for {args.politician}...")
     
     # Run the Wikipedia spider
     print("\n1. Running Wikipedia scraper...")
-    wiki_args = ["-a", f"politician_name={args.politician}"]
+    wiki_args = [
+        "-a", f"politician_name={args.politician}",
+        "-a", f"follow_links={args.follow_links}",
+        "-a", f"max_links={args.max_links}"
+    ]
     success = run_spider("wikipedia_politician", wiki_args, script_dir)
     
-    if not success:
-        print("Wikipedia scraper failed. Continuing with other scrapers...")
-    
-    # Run the News API spider if requested
+    # Run the News API spider if not disabled
     if not args.no_news:
         print("\n2. Running News API scraper...")
         news_args = ["-a", f"politician_name={args.politician}"]
         
-        # Check for API key from command line or .env file
+        # Add API key if provided
         api_key = args.api_key or os.getenv('NEWS_API_KEY')
         if api_key:
-            news_args.extend(["-a", f"api_key={api_key}"])
             print("Using NewsAPI key for better results")
+            news_args.extend(["-a", f"api_key={api_key}"])
         else:
             print("No NewsAPI key found. Will use limited access mode.")
         
-        success = run_spider("news_api", news_args, script_dir)
+        # Add max pages and time span
+        news_args.extend(["-a", f"max_pages={args.max_pages}"])
+        news_args.extend(["-a", f"time_span={args.time_span}"])
         
-        if not success:
-            print("News API scraper failed.")
-    else:
-        print("\n2. Skipping News API scraper as requested.")
+        success = run_spider("news_api", news_args, script_dir) and success
     
     # Allow time for any file operations to complete
     time.sleep(1)

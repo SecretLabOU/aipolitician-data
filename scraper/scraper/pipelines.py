@@ -8,6 +8,7 @@ from pathlib import Path
 try:
     import spacy
     SPACY_AVAILABLE = True
+    print("spaCy library found and imported successfully.")
 except ImportError:
     print("Warning: spaCy is not available. Text processing will be limited.")
     SPACY_AVAILABLE = False
@@ -26,16 +27,24 @@ class PoliticianPipeline:
             try:
                 self.nlp = spacy.load("en_core_web_sm")
                 print("Loaded spaCy model successfully.")
-            except OSError:
+            except OSError as e:
+                print(f"Error loading spaCy model: {str(e)}")
                 try:
-                    print("Downloading spaCy model...")
+                    print("Attempting to download spaCy model...")
+                    # Try to download the model
                     from spacy.cli import download
                     download("en_core_web_sm")
+                    # Try loading again
                     self.nlp = spacy.load("en_core_web_sm")
                     print("Downloaded and loaded spaCy model successfully.")
                 except Exception as e:
                     print(f"Could not download spaCy model: {str(e)}")
                     print("Falling back to basic text processing.")
+            except Exception as e:
+                print(f"Unexpected error with spaCy: {str(e)}")
+                print("Falling back to basic text processing.")
+        else:
+            print("spaCy not available, using basic text processing only.")
     
     def process_item(self, item, spider):
         """Process the scraped item and save it to a JSON file"""
