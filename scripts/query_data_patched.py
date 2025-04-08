@@ -1,8 +1,12 @@
-# scripts/query_data.py
+#!/usr/bin/env python3
+"""
+Query the ChromaDB database with NumPy 2.0 compatibility patch.
+Fixed version with proper handling of multiple where filters.
+"""
+
 import sys
 import argparse
-from chromadb.errors import NotFoundError
-from chroma_config import get_chroma_client, print_collections, DB_DIR
+from chroma_config_patched import get_chroma_client, print_collections, DB_DIR
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -34,16 +38,25 @@ def main():
             "n_results": args.results
         }
         
-        # Add filters if specified
-        where_clause = {}
-        if args.politician:
-            where_clause["politician_name"] = args.politician
-        if args.type:
-            where_clause["type"] = args.type
+        # Build where clause using proper ChromaDB format
+        where_conditions = []
         
-        if where_clause:
-            query_params["where"] = where_clause
-            print(f"Using filters: {where_clause}")
+        if args.politician:
+            where_conditions.append({"politician_name": args.politician})
+        
+        if args.type:
+            where_conditions.append({"type": args.type})
+        
+        # Add filters if specified
+        if where_conditions:
+            if len(where_conditions) == 1:
+                # Only one condition, use it directly
+                query_params["where"] = where_conditions[0]
+            else:
+                # Multiple conditions, use the $and operator
+                query_params["where"] = {"$and": where_conditions}
+            
+            print(f"Using filters: {query_params['where']}")
         
         # Execute the query
         results = collection.query(**query_params)
@@ -68,11 +81,11 @@ def main():
             print(f"Text: {doc[:150]}..." if len(doc) > 150 else f"Text: {doc}")
             print(f"Source: {metadata.get('source_url', 'Unknown')}")
             
-    except NotFoundError:
-        print("Error: Collection 'politicians' not found in the database.")
+    except Exception as e:
+        print(f"Error accessing collection: {str(e)}")
         print("\nPossible solutions:")
-        print("1. Run the ingest_data.py script first to create the collection and add data.")
-        print("2. Check that you're using the correct database path (/opt/chroma_db).")
+        print("1. Run the ingest_data_patched.py script first to create the collection and add data.")
+        print(f"2. Check that you're using the correct database path ({DB_DIR}).")
         print("3. Ensure you have write permissions to the database directory.")
         
         # List available collections to help troubleshoot
@@ -82,11 +95,11 @@ def main():
         print("\nAttempting to create the collection as a fallback...")
         try:
             politicians_collection = client.create_collection("politicians")
-            print("Created empty 'politicians' collection. Please run ingest_data.py to add data.")
+            print("Created empty 'politicians' collection. Please run ingest_data_patched.py to add data.")
         except Exception as e:
             print(f"Failed to create collection: {e}")
         
         sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    main() 

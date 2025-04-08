@@ -1,12 +1,13 @@
 """
 Diagnostic script for Chroma database.
 This script performs various checks to help troubleshoot issues with the Chroma database.
+Uses the patched ChromaDB configuration for NumPy 2.0 compatibility.
 """
 
 import os
 import sys
 import shutil
-from chroma_config import get_chroma_client, print_collections, DB_DIR
+from chroma_config_patched import get_chroma_client, print_collections, DB_DIR
 
 def check_db_files():
     """Check if the database files exist and are accessible."""

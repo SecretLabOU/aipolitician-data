@@ -36,3 +36,9 @@ dateparser==1.2.1         # Advanced date parsing capabilities, especially for a
 transformers>=4.37.2      # For the embedding model in search utility
 torch>=2.0.0              # PyTorch for tensor operations in search utility
 numpy>=1.26.0             # Numerical operations for search utility
+
+# Vector Database and Embeddings
+chromadb==0.4.18          # Vector database for RAG system
+sentence-transformers==2.2.2  # High-quality text embeddings for RAG
+tqdm==4.66.1              # Progress bars for data processing
+typing-extensions>=4.5.0  # Type hinting support

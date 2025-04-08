@@ -1,15 +1,17 @@
 """
 Shared configuration for all Chroma scripts.
 This ensures consistency across all scripts.
+Uses the patched chromadb for NumPy 2.0 compatibility.
 """
 
 import os
 import sys
-import chromadb
+import chroma_patched  # Import patched version instead of direct import
+from chroma_patched import chromadb  # Get the patched chromadb module
 from chromadb.config import Settings
 
 # Database directory path - centralized configuration
-DB_DIR = "/opt/chroma_db"
+DB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "chroma_db")
 
 def check_directory_access(directory, need_write=True):
     """Check if the directory exists and has proper permissions."""
