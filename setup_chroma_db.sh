@@ -37,7 +37,9 @@ cd ..
 echo ""
 echo "===== Step 2: Ingesting politician data into ChromaDB ====="
 cd scripts
-python ingest_data_patched.py ../data/formatted/formatted_*.json
+# Instead of using shell glob which might not work consistently across platforms,
+# let Python handle finding the formatted data files
+python ingest_data_patched.py --data-pattern="../data/formatted/formatted_*.json"
 cd ..
 
 # Step 3: Run a test query to verify the setup

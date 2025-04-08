@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import glob
+import argparse
 from collections import defaultdict
 from chroma_config_patched import get_chroma_client, print_collections, DB_DIR
 
@@ -92,6 +93,12 @@ def ingest_politician(entry, collection):
     return stats
 
 def main():
+    # Set up argument parser for better command line handling
+    parser = argparse.ArgumentParser(description='Ingest politician data into ChromaDB')
+    parser.add_argument('files', nargs='*', help='Files to ingest (accepts glob patterns)')
+    parser.add_argument('--data-pattern', help='Glob pattern for data files to ingest')
+    args = parser.parse_args()
+    
     # Get the client from the shared config
     client = get_chroma_client()
     
@@ -101,17 +108,23 @@ def main():
     # Get data files from command line arguments or use default
     data_files = []
     
-    # Handle command line arguments which could be individual files or glob patterns
-    if len(sys.argv) > 1:
-        for arg in sys.argv[1:]:
+    # First check if data-pattern is provided
+    if args.data_pattern:
+        # Expand the pattern to actual files
+        data_files.extend(glob.glob(args.data_pattern))
+    
+    # Then handle positional arguments which could be individual files or glob patterns
+    if args.files:
+        for arg in args.files:
             # If the argument is a glob pattern, expand it
             if '*' in arg or '?' in arg:
                 expanded_files = glob.glob(arg)
                 data_files.extend(expanded_files)
             else:
                 data_files.append(arg)
-    else:
-        # Use default if no arguments provided
+    
+    # If no files were specified through either method, use the default pattern
+    if not data_files:
         data_files = glob.glob(DEFAULT_DATA_PATTERN)
     
     # Remove duplicates and sort
