@@ -54,16 +54,24 @@ class WikipediaPoliticianSpider(scrapy.Spider):
         self.logger.info(f"Processing URL: {response.url}")
         self.visited_urls.add(response.url)
         
+        # Add debug information about what we're checking
+        self.logger.debug(f"DEBUG: Looking for #noarticletext element to check if page exists")
+        no_article_element = response.css("#noarticletext").get()
+        self.logger.debug(f"DEBUG: #noarticletext element found: {no_article_element is not None}")
+        
         # Check if we're on a valid page
-        page_exists = response.css("#noarticletext").get() is None
+        page_exists = no_article_element is None
         
         if not page_exists:
             self.logger.info(f"Page does not exist, trying search: {self.search_url}")
             yield scrapy.Request(self.search_url, callback=self.parse_search_results)
             return
-            
+        
+        # Debug message before calling parse_politician_page
+        self.logger.debug(f"DEBUG: Page exists, calling parse_politician_page")    
+        
         # We're on a valid page, continue with parsing
-        return self.parse_politician_page(response)
+        yield from self.parse_politician_page(response)
         
     def parse_search_results(self, response):
         """Parse search results and follow the first result."""
@@ -94,6 +102,7 @@ class WikipediaPoliticianSpider(scrapy.Spider):
         
         # Create item on first page only
         if self.main_item is None:
+            self.logger.debug("DEBUG: Creating new main item")
             self.main_item = PoliticianItem()
             # Basic information
             title = response.css("h1#firstHeading::text").get()
@@ -128,6 +137,7 @@ class WikipediaPoliticianSpider(scrapy.Spider):
                 self.logger.info("No political party found")
         
         # Get the main content from the current page
+        self.logger.debug("DEBUG: Extracting content paragraphs")
         content_paragraphs = response.css("#mw-content-text .mw-parser-output > p").getall()
         if content_paragraphs:
             raw_content = "\n".join([self.clean_html(p) for p in content_paragraphs if p.strip()])
@@ -204,6 +214,9 @@ class WikipediaPoliticianSpider(scrapy.Spider):
                 yield response.follow(link, self.parse_related_page)
             
         # Final yield if this was the main page or if we've followed all links
+        self.logger.debug(f"DEBUG: Checking if we should yield the main item. Main URL: {self.main_item['source_url']}, Current URL: {response.url}")
+        self.logger.debug(f"DEBUG: Follow links: {self.follow_links}, Links followed: {self.links_followed}, Max links: {self.max_links}")
+        
         if response.url == self.main_item['source_url'] or (self.follow_links and self.links_followed >= self.max_links):
             # Add all collected content to the main item
             if self.related_content:
@@ -228,7 +241,9 @@ class WikipediaPoliticianSpider(scrapy.Spider):
             if not self.main_item.get('raw_content') and not self.main_item.get('speeches') and not self.main_item.get('statements'):
                 self.logger.warning("Warning: No significant content extracted from the page")
             
+            self.logger.debug("DEBUG: About to yield the main item")
             yield self.main_item
+            self.logger.debug("DEBUG: Main item yielded")
     
     def parse_related_page(self, response):
         """Parse related pages and extract additional content."""
