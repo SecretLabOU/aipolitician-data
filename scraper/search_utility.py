@@ -25,7 +25,7 @@ class PoliticianDataSearch:
         """Initialize the search utility with the data directory"""
         if data_dir is None:
             self.data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
-                                       "data", "enhanced")
+                                       "data", "formatted")
         else:
             self.data_dir = data_dir
             
@@ -50,10 +50,10 @@ class PoliticianDataSearch:
             
     def load_politician_data(self):
         """Load all enhanced politician data files"""
-        json_files = glob.glob(os.path.join(self.data_dir, "enhanced_*.json"))
+        json_files = glob.glob(os.path.join(self.data_dir, "formatted_*.json"))
         
         if not json_files:
-            logger.warning(f"No enhanced politician data files found in {self.data_dir}")
+            logger.warning(f"No formatted politician data files found in {self.data_dir}")
             return False
             
         for file_path in json_files:
@@ -158,43 +158,58 @@ class PoliticianDataSearch:
         for politician in self.politicians:
             politician_name = politician.get("name", "Unknown")
             
-            # Search news mentions
-            if "content" in politician and "news_mentions" in politician["content"]:
-                news_results = self.search_news_mentions(
+            # Search entries
+            if "entries" in politician:
+                entry_results = self.search_entries(
                     politician, query, query_embedding
                 )
-                for result in news_results:
+                for result in entry_results:
                     result["politician"] = politician_name
                     all_results.append(result)
-            
-            # Search statements
-            if "content" in politician and "statements" in politician["content"]:
-                statement_results = self.search_statements(
-                    politician, query, query_embedding
-                )
-                for result in statement_results:
-                    result["politician"] = politician_name
-                    all_results.append(result)
-                    
-            # Search speeches
-            if "content" in politician and "speeches" in politician["content"]:
-                speech_results = self.search_speeches(
-                    politician, query, query_embedding
-                )
-                for result in speech_results:
-                    result["politician"] = politician_name
-                    all_results.append(result)
-                    
-            # Search bio
-            bio_result = self.search_bio(politician, query, query_embedding)
-            if bio_result:
-                bio_result["politician"] = politician_name
-                all_results.append(bio_result)
         
         # Sort by relevance and get top results
         sorted_results = sorted(all_results, key=lambda x: x.get("relevance", 0), reverse=True)
         return sorted_results[:top_k]
     
+    def search_entries(self, politician, query, query_embedding):
+        """Search within politician entries"""
+        results = []
+        
+        # Get entries
+        entries = politician.get("entries", [])
+        
+        if not entries:
+            return []
+            
+        # Process each entry
+        for entry in entries:
+            entry_text = entry.get("text", "")
+            if not entry_text:
+                continue
+                
+            # Generate embedding for entry text
+            entry_embedding = self.generate_query_embedding(entry_text[:512])  # Limit to first 512 chars
+            
+            if entry_embedding is None:
+                continue
+                
+            # Calculate similarity
+            similarity = self.cosine_similarity(query_embedding, entry_embedding)
+            
+            # Only include if similarity is above threshold
+            if similarity > 0.2:
+                # Create a snippet around relevant text
+                snippet = self.create_content_snippet(entry_text, query)
+                
+                results.append({
+                    "type": entry.get("type", "unknown"),
+                    "content": snippet if snippet else entry_text[:200] + "...",
+                    "relevance": similarity,
+                    "source": entry.get("source_url", "")
+                })
+                
+        return results
+        
     def search_news_mentions(self, politician, query, query_embedding):
         """Search within news mentions"""
         results = []
@@ -388,48 +403,25 @@ class PoliticianDataSearch:
         for politician in self.politicians:
             politician_name = politician.get("name", "Unknown")
             
-            # Search news mentions
-            if "content" in politician and "news_mentions" in politician["content"]:
-                for news in politician["content"]["news_mentions"]:
-                    title = news.get("title", "").lower()
-                    content = news.get("content", "").lower()
+            # Search entries
+            if "entries" in politician:
+                for entry in politician["entries"]:
+                    text = entry.get("text", "").lower()
                     
-                    # Check if query terms are in title or content
-                    query_terms = query_lower.split()
-                    matches = sum(1 for term in query_terms if len(term) > 2 and (term in title or term in content))
-                    relevance = matches / len(query_terms) if query_terms else 0
-                    
-                    if relevance > 0.3:
-                        snippet = self.create_content_snippet(news.get("content", ""), query)
-                        
-                        all_results.append({
-                            "type": "news",
-                            "politician": politician_name,
-                            "title": news.get("title", ""),
-                            "content": snippet if snippet else news.get("content", "")[:200] + "...",
-                            "relevance": relevance,
-                            "source": news.get("source", ""),
-                            "url": news.get("url", ""),
-                            "published_date": news.get("published_date", "")
-                        })
-            
-            # Search statements
-            if "content" in politician and "statements" in politician["content"]:
-                for statement in politician["content"]["statements"]:
-                    text = statement.get("text", "").lower()
-                    
-                    # Check if query terms are in statement
+                    # Check if query terms are in text
                     query_terms = query_lower.split()
                     matches = sum(1 for term in query_terms if len(term) > 2 and term in text)
                     relevance = matches / len(query_terms) if query_terms else 0
                     
                     if relevance > 0.3:
+                        snippet = self.create_content_snippet(entry.get("text", ""), query)
+                        
                         all_results.append({
-                            "type": "statement",
+                            "type": entry.get("type", "unknown"),
                             "politician": politician_name,
-                            "content": statement.get("text", ""),
+                            "content": snippet if snippet else entry.get("text", "")[:200] + "...",
                             "relevance": relevance,
-                            "source": statement.get("source", "")
+                            "source": entry.get("source_url", "")
                         })
         
         # Sort by relevance and get top results
@@ -437,9 +429,9 @@ class PoliticianDataSearch:
         return sorted_results[:top_k]
                     
 def main():
-    parser = argparse.ArgumentParser(description='Search enhanced politician data')
+    parser = argparse.ArgumentParser(description='Search formatted politician data')
     parser.add_argument('query', help='The search query')
-    parser.add_argument('--dir', help='Directory containing enhanced politician data')
+    parser.add_argument('--dir', help='Directory containing formatted politician data')
     parser.add_argument('--keyword', action='store_true', help='Use keyword search instead of semantic search')
     parser.add_argument('--top', type=int, default=5, help='Number of top results to return')
     args = parser.parse_args()
