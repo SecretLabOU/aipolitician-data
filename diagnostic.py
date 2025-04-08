@@ -215,4 +215,4 @@ def main():
     print("4. Try the simple_scrape.py directly: python scraper/simple_scrape.py --politician \"Kamala Harris\"")
 
 if __name__ == "__main__":
-    main() 
+    main()
