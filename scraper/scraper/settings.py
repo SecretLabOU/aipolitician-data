@@ -23,12 +23,19 @@ ITEM_PIPELINES = {
 # Configure logging level - set to DEBUG for more detailed output
 LOG_LEVEL = 'DEBUG'
 
+# Use absolute path for data directory
+import os
+from pathlib import Path
+DATA_DIR = Path(__file__).resolve().parents[2] / 'data'
+# Create the data directory if it doesn't exist
+DATA_DIR.mkdir(exist_ok=True)
+
 # Configure output directory for scraped files
-FILES_STORE = '../data'
+FILES_STORE = str(DATA_DIR)
 
 # Save items directly to JSON files
 FEEDS = {
-    '../data/%(name)s_%(time)s.json': {
+    str(DATA_DIR / '%(name)s_%(time)s.json'): {
         'format': 'json',
         'encoding': 'utf8',
         'store_empty': False,
