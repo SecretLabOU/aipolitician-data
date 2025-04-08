@@ -254,6 +254,37 @@ If you see "package not found" errors when running scripts, but the packages are
 2. Run scripts with the full Python path: `$CONDA_PREFIX/bin/python script.py`
 3. For shell scripts like comprehensive_scrape.sh, activate the conda environment first, then run the script
 
+### Git Divergence Issues
+
+If you encounter Git errors about "divergent branches" when pulling from the repository:
+
+```
+hint: You have divergent branches and need to specify how to reconcile them.
+fatal: Need to specify how to reconcile divergent branches.
+```
+
+You can resolve this by choosing one of these approaches:
+
+1. **Merge approach** (keep all changes):
+   ```bash
+   git config pull.rebase false
+   git pull
+   ```
+
+2. **Rebase approach** (cleaner history):
+   ```bash
+   git config pull.rebase true
+   git pull
+   ```
+
+3. **Fast-forward only** (safest option):
+   ```bash
+   git config pull.ff only
+   git pull
+   ```
+
+If you have local changes you want to keep, make sure to commit them first.
+
 ### Permission Denied
 
 If you see permission errors when running shell scripts:

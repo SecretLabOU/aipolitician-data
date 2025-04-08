@@ -60,8 +60,5 @@ read -n 1 -s
 echo "Starting comprehensive data collection..."
 $PYTHON_CMD run.py --politician "$1" --comprehensive
 
-# Make the output file executable
-chmod +x comprehensive_scrape.sh
-
 echo "Data collection complete!"
 echo "Check the data directory for the results." 
