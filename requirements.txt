@@ -1,5 +1,30 @@
-# Politician Scraper Dependencies
-requests==2.31.0
-beautifulsoup4==4.12.2
-wikipedia==1.4.0
-lxml==4.9.3
+# Core Scraper Dependencies
+requests==2.31.0          # HTTP requests library
+beautifulsoup4==4.12.2    # HTML parsing library
+lxml==5.3.2               # XML/HTML parser - faster processing for BeautifulSoup
+trafilatura==2.0.0        # Extracts main text content from web pages
+feedparser==6.0.10        # RSS/Atom feed parser for news scraping
+python-dateutil>=2.9.0.post0  # Powerful date parsing library
+
+# Wikipedia API
+wikipedia==1.4.0          # Wikipedia API wrapper for Python
+
+# Browser Automation
+selenium==4.31.0          # Browser automation for JavaScript-rendered sites
+webdriver-manager==4.0.2  # Manages driver binaries for Selenium
+
+# HTML Cleaning and Content Extraction
+justext==3.0.2            # Extracts relevant content from web pages
+htmldate==1.9.3           # Extracts publication dates from web pages
+courlan==1.3.2            # URL handling and cleaning
+
+# Natural Language Processing
+nltk==3.8.1               # Natural Language Toolkit for text processing
+# To download NLTK resources:
+# python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords')"
+
+# Article Parsing
+newspaper3k==0.2.8        # News article scraping and curation
+
+# Date Parsing
+dateparser==1.2.1         # Advanced date parsing capabilities, especially for ambiguous formats
