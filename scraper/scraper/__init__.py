@@ -1,1 +1,0 @@
-# AI Politician Data Scraper package 
