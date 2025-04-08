@@ -1,133 +1,211 @@
 #!/usr/bin/env python
 """
-Diagnostic script for the political data scraper.
-This will check for common issues and help debug problems.
+Diagnostic tool for the AI Politician data scraper.
+This script checks common issues with the scraper setup and configuration.
+
+Usage:
+    python diagnostic.py
 """
 
 import os
 import sys
-from pathlib import Path
 import json
+import platform
+from pathlib import Path
+import importlib.util
 
-def check_environment():
-    """Check the Python environment and dependencies"""
+def check_python_version():
+    """Check Python version."""
     print("=== Python Environment ===")
     print(f"Python version: {sys.version}")
     print(f"Working directory: {os.getcwd()}")
-    
-    # Check for .env file
-    root_dir = Path().resolve()
-    env_path = root_dir / '.env'
-    if env_path.exists():
-        print(f".env file found at: {env_path}")
-        
-        # Check .env file content without displaying API key
-        with open(env_path, 'r') as f:
-            content = f.read().strip()
-            lines = content.split('\n')
-            for line in lines:
-                if line and not line.startswith('#'):
-                    # Don't show actual API key, just indicate it exists
-                    if 'API_KEY' in line:
-                        key_name = line.split('=')[0].strip()
-                        print(f"Found key in .env: {key_name}=********")
-                    else:
-                        print(f"Found in .env: {line}")
-    else:
-        print("No .env file found in root directory")
-        
-        # Check in scraper directory
-        scraper_env = root_dir / 'scraper' / '.env'
-        if scraper_env.exists():
-            print(f".env file found at: {scraper_env}")
-        else:
-            print("No .env file found in scraper directory either")
-    
-    # Check for data directory
-    data_dir = root_dir / 'data'
-    if data_dir.exists() and data_dir.is_dir():
-        print(f"Data directory found at: {data_dir}")
-        
-        # Check for any JSON files
-        json_files = list(data_dir.glob('*.json'))
-        if json_files:
-            print(f"Found {len(json_files)} JSON files in data directory:")
-            for file in json_files:
-                print(f"  - {file.name}")
-        else:
-            print("No JSON files found in data directory")
-    else:
-        print("Data directory not found, will need to be created")
-    
-    # Check for spaCy
-    try:
-        import spacy
-        print(f"spaCy is installed (version: {spacy.__version__})")
-        
-        # Check for spaCy models
-        try:
-            nlp = spacy.load("en_core_web_sm")
-            print("en_core_web_sm model is available")
-        except OSError:
-            print("en_core_web_sm model is NOT available")
-    except ImportError:
-        print("spaCy is NOT installed or not found in PYTHONPATH")
-    
-    # Check for other dependencies
-    for module in ["scrapy", "requests", "dotenv"]:
-        try:
-            __import__(module)
-            print(f"{module} is installed")
-        except ImportError:
-            print(f"{module} is NOT installed")
+    return True
 
-def test_simple_scrape():
-    """Test simple scraper functionality"""
+def check_env_file():
+    """Check for .env file and API key."""
+    # Check in current directory and one level up
+    env_paths = [
+        Path('.env'),
+        Path('../.env'),
+        Path('scraper/.env')
+    ]
+    
+    env_found = False
+    for env_path in env_paths:
+        if env_path.exists():
+            print(f".env file found at: {env_path.resolve()}")
+            env_found = True
+            
+            # Check if it contains the API key
+            with open(env_path, 'r') as f:
+                content = f.read()
+                if 'NEWS_API_KEY' in content:
+                    key_value = content.split('NEWS_API_KEY=')[1].split('\n')[0]
+                    masked_key = '*' * len(key_value)
+                    print(f"Found key in .env: NEWS_API_KEY={masked_key}")
+                else:
+                    print("Warning: No NEWS_API_KEY found in .env file")
+    
+    if not env_found:
+        print("Warning: No .env file found")
+    
+    return env_found
+
+def check_data_directory():
+    """Check if data directory exists and has files."""
+    data_paths = [
+        Path('data'),
+        Path('../data'),
+        Path('scraper/data')
+    ]
+    
+    data_dir = None
+    for path in data_paths:
+        if path.exists() and path.is_dir():
+            data_dir = path
+            break
+    
+    if data_dir:
+        print(f"Data directory found at: {data_dir.resolve()}")
+        json_files = list(data_dir.glob('*.json'))
+        print(f"Found {len(json_files)} JSON files in data directory:")
+        for file in json_files[:5]:  # Show up to 5 files
+            print(f"  - {file.name}")
+        if len(json_files) > 5:
+            print(f"  - ...and {len(json_files) - 5} more")
+        return True
+    else:
+        print("Warning: Data directory not found")
+        return False
+
+def check_dependencies():
+    """Check if required packages are installed."""
+    dependencies = {
+        'spacy': {'required': False, 'version': None},
+        'scrapy': {'required': True, 'version': None},
+        'requests': {'required': True, 'version': None},
+        'python-dotenv': {'required': True, 'version': None, 'import_name': 'dotenv'},
+    }
+    
+    # Check each dependency
+    for pkg, info in dependencies.items():
+        import_name = info.get('import_name', pkg)
+        spec = importlib.util.find_spec(import_name)
+        if spec is not None:
+            try:
+                module = importlib.import_module(import_name)
+                if hasattr(module, '__version__'):
+                    info['version'] = module.__version__
+                    print(f"{pkg} is installed (version: {info['version']})")
+                else:
+                    print(f"{pkg} is installed")
+                info['installed'] = True
+            except ImportError:
+                info['installed'] = False
+                if info['required']:
+                    print(f"ERROR: {pkg} is required but could not be imported")
+                else:
+                    print(f"Warning: {pkg} is not available")
+        else:
+            info['installed'] = False
+            if info['required']:
+                print(f"ERROR: {pkg} is required but not installed")
+            else:
+                print(f"Warning: {pkg} is not installed")
+    
+    # Check spaCy model
+    if dependencies['spacy']['installed']:
+        try:
+            import spacy
+            model_name = "en_core_web_sm"
+            try:
+                spacy.load(model_name)
+                print(f"{model_name} model is available")
+            except OSError:
+                print(f"Warning: {model_name} model is not available. Install with:")
+                print(f"python -m spacy download {model_name}")
+        except ImportError:
+            pass
+    
+    return all(info['installed'] for pkg, info in dependencies.items() if info['required'])
+
+def test_wikipedia_api():
+    """Test access to Wikipedia API."""
     print("\n=== Testing Simple Scrape ===")
+    print("Testing Wikipedia API access...")
+    try:
+        import requests
+        response = requests.get("https://en.wikipedia.org/w/api.php?action=query&titles=Barack_Obama&format=json")
+        if response.status_code == 200:
+            print(f"Wikipedia API is accessible (status: {response.status_code})")
+            return True
+        else:
+            print(f"Warning: Wikipedia API returned status {response.status_code}")
+            return False
+    except Exception as e:
+        print(f"Error accessing Wikipedia API: {str(e)}")
+        return False
+
+def test_newsapi_access():
+    """Test access to NewsAPI."""
+    print("Testing NewsAPI access with key from .env...")
+    
+    # Find .env file
+    env_paths = [
+        Path('.env'),
+        Path('../.env'),
+        Path('scraper/.env')
+    ]
+    
+    api_key = None
+    for env_path in env_paths:
+        if env_path.exists():
+            with open(env_path, 'r') as f:
+                content = f.read()
+                if 'NEWS_API_KEY' in content:
+                    api_key = content.split('NEWS_API_KEY=')[1].split('\n')[0]
+                    break
+    
+    if not api_key:
+        print("Warning: No NewsAPI key found in .env files")
+        return False
     
     try:
         import requests
-        print("Testing Wikipedia API access...")
-        
-        # Test access to Wikipedia API
-        response = requests.get("https://en.wikipedia.org/w/api.php?action=opensearch&search=test&limit=1&format=json")
+        url = f"https://newsapi.org/v2/everything?q=test&apiKey={api_key}&pageSize=1"
+        response = requests.get(url)
         if response.status_code == 200:
-            print(f"Wikipedia API is accessible (status: {response.status_code})")
+            print("NewsAPI is accessible and API key is valid")
+            return True
         else:
-            print(f"Wikipedia API returned status: {response.status_code}")
+            print(f"Warning: NewsAPI returned status {response.status_code}")
+            print(f"Response: {response.text[:200]}...")
+            return False
     except Exception as e:
-        print(f"Error testing Wikipedia API: {str(e)}")
-    
-    # Test NewsAPI access if key available
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-        api_key = os.getenv('NEWS_API_KEY')
-        
-        if api_key:
-            print("Testing NewsAPI access with key from .env...")
-            url = f"https://newsapi.org/v2/everything?q=test&pageSize=1&apiKey={api_key}"
-            response = requests.get(url)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('status') == 'ok':
-                    print("NewsAPI is accessible and API key is valid")
-                else:
-                    print(f"NewsAPI error: {data.get('message', 'Unknown error')}")
-            else:
-                print(f"NewsAPI returned status: {response.status_code}")
-        else:
-            print("No NewsAPI key found in environment variables")
-    except Exception as e:
-        print(f"Error testing NewsAPI: {str(e)}")
+        print(f"Error accessing NewsAPI: {str(e)}")
+        return False
 
 def main():
+    """Run all diagnostic checks."""
     print("=== Scraper Diagnostic Tool ===")
-    print("This tool will check for common issues with the political data scraper\n")
+    print("This tool will check for common issues with the political data scraper")
+    print("")
     
-    check_environment()
-    test_simple_scrape()
+    # Check Python environment
+    check_python_version()
+    
+    # Check .env file
+    check_env_file()
+    
+    # Check data directory
+    check_data_directory()
+    
+    # Check dependencies
+    check_dependencies()
+    
+    # Test API access
+    test_wikipedia_api()
+    test_newsapi_access()
     
     print("\n=== Diagnostic Complete ===")
     print("If you're experiencing issues, try the following fixes:")
