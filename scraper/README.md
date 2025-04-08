@@ -121,4 +121,23 @@ pip install requests
 python simple_scrape.py --politician "Politician Name"
 ```
 
-This simplified version only collects basic information from Wikipedia and doesn't require spaCy or Scrapy. 
+This simplified version only collects basic information from Wikipedia and doesn't require spaCy or Scrapy.
+
+## API Keys
+
+The scraper can use the News API to gather recent news about politicians. To use this feature:
+
+1. Sign up for a free API key at [NewsAPI.org](https://newsapi.org/)
+2. Create a `.env` file in the scraper directory (copy from `.env.example`):
+   ```bash
+   cp .env.example .env
+   ```
+3. Edit the `.env` file and add your API key:
+   ```
+   NEWS_API_KEY=your_actual_api_key_here
+   ```
+
+The scraper will automatically use the API key from your `.env` file. You can also pass it directly via the command line if you prefer:
+```bash
+python run.py --politician "Politician Name" --api-key "your-api-key"
+``` 
