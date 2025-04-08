@@ -41,7 +41,8 @@ def check_dependencies():
     
     try:
         import dotenv
-        print(f"python-dotenv version: {dotenv.__version__}")
+        # python-dotenv doesn't expose __version__ directly
+        print("python-dotenv is installed")
     except ImportError:
         missing_packages.append("python-dotenv")
     
