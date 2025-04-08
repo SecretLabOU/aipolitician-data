@@ -20,6 +20,23 @@ ITEM_PIPELINES = {
     "scraper.pipelines.PoliticianPipeline": 300,
 }
 
+# Configure logging level - set to DEBUG for more detailed output
+LOG_LEVEL = 'DEBUG'
+
+# Configure output directory for scraped files
+FILES_STORE = '../data'
+
+# Save items directly to JSON files
+FEEDS = {
+    '../data/%(name)s_%(time)s.json': {
+        'format': 'json',
+        'encoding': 'utf8',
+        'store_empty': False,
+        'fields': None,
+        'indent': 4,
+    },
+}
+
 # Set settings whose default value is deprecated to a future-proof value
 REQUEST_FINGERPRINTER_IMPLEMENTATION = "2.7"
 TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"

@@ -223,10 +223,21 @@ def main():
     script_dir = Path(__file__).resolve().parent
     
     # Load environment variables from .env file if exists
-    env_path = script_dir / '.env'
-    if env_path.exists():
-        load_dotenv(env_path)
-        print("Loaded environment variables from .env file")
+    env_files = [
+        script_dir / '.env',        # Look in scraper directory
+        script_dir.parent / '.env'  # Look in parent (root) directory
+    ]
+    
+    env_loaded = False
+    for env_path in env_files:
+        if env_path.exists():
+            load_dotenv(env_path)
+            print(f"Loaded environment variables from {env_path}")
+            env_loaded = True
+            break
+    
+    if not env_loaded:
+        print("No .env file found")
     
     # Ensure we're in the correct directory
     os.chdir(script_dir)
