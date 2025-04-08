@@ -2,8 +2,15 @@ import json
 import os
 import datetime
 import re
-import spacy
 from pathlib import Path
+
+# Try to import spacy, but provide a fallback if it fails
+try:
+    import spacy
+    SPACY_AVAILABLE = True
+except ImportError:
+    print("Warning: spaCy is not available. Text processing will be limited.")
+    SPACY_AVAILABLE = False
 
 class PoliticianPipeline:
     """Pipeline for processing and saving politician data"""
@@ -13,14 +20,22 @@ class PoliticianPipeline:
         self.data_dir = Path(__file__).resolve().parents[2] / 'data'
         self.data_dir.mkdir(exist_ok=True)
         
-        # Load spaCy model for text processing
-        try:
-            self.nlp = spacy.load("en_core_web_sm")
-        except OSError:
-            print("Downloading spaCy model...")
-            from spacy.cli import download
-            download("en_core_web_sm")
-            self.nlp = spacy.load("en_core_web_sm")
+        # Load spaCy model for text processing if available
+        self.nlp = None
+        if SPACY_AVAILABLE:
+            try:
+                self.nlp = spacy.load("en_core_web_sm")
+                print("Loaded spaCy model successfully.")
+            except OSError:
+                try:
+                    print("Downloading spaCy model...")
+                    from spacy.cli import download
+                    download("en_core_web_sm")
+                    self.nlp = spacy.load("en_core_web_sm")
+                    print("Downloaded and loaded spaCy model successfully.")
+                except Exception as e:
+                    print(f"Could not download spaCy model: {str(e)}")
+                    print("Falling back to basic text processing.")
     
     def process_item(self, item, spider):
         """Process the scraped item and save it to a JSON file"""
@@ -55,7 +70,7 @@ class PoliticianPipeline:
         return item
     
     def clean_text(self, text):
-        """Clean and normalize text using spaCy"""
+        """Clean and normalize text using spaCy if available, otherwise use basic cleaning"""
         if not text:
             return ""
         
@@ -63,14 +78,26 @@ class PoliticianPipeline:
         text = re.sub(r'\s+', ' ', text)  # Replace multiple spaces with single space
         text = text.strip()
         
-        # Use spaCy for more advanced text cleaning
-        doc = self.nlp(text)
+        # Use spaCy for more advanced text cleaning if available
+        if self.nlp:
+            try:
+                doc = self.nlp(text)
+                # Remove emails, URLs, and other non-relevant information
+                cleaned_tokens = [token.text for token in doc if not token.like_email and not token.like_url]
+                return " ".join(cleaned_tokens)
+            except Exception as e:
+                print(f"Error during spaCy processing: {str(e)}")
+                # Fall back to basic cleaning if spaCy fails
+                
+        # Fallback: just use regex for basic cleaning
+        # Remove citation brackets like [1], [2], etc.
+        text = re.sub(r'\[\d+\]', '', text)
+        # Try to remove URLs with a simple regex
+        text = re.sub(r'https?://\S+', '', text)
+        # Remove email addresses
+        text = re.sub(r'\S+@\S+', '', text)
         
-        # Remove emails, URLs, and other non-relevant information if needed
-        # This is a simple version, can be expanded based on requirements
-        cleaned_tokens = [token.text for token in doc if not token.like_email and not token.like_url]
-        
-        return " ".join(cleaned_tokens)
+        return text
     
     def generate_id_from_name(self, name):
         """Generate a URL-friendly ID from the politician's name"""

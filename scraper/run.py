@@ -15,6 +15,58 @@ import time
 import json
 from pathlib import Path
 
+def check_dependencies():
+    """Check if all required packages are installed."""
+    missing_packages = []
+    
+    # Check for required packages
+    try:
+        import scrapy
+    except ImportError:
+        missing_packages.append("scrapy")
+    
+    try:
+        import numpy
+    except ImportError:
+        missing_packages.append("numpy")
+    
+    try:
+        import requests
+    except ImportError:
+        missing_packages.append("requests")
+    
+    # Try to import spacy, but it's optional (fallback available)
+    try:
+        import spacy
+        has_spacy = True
+    except ImportError:
+        has_spacy = False
+        missing_packages.append("spacy (optional)")
+    
+    # If spacy is available, check for language model
+    if has_spacy:
+        try:
+            spacy.load("en_core_web_sm")
+        except OSError:
+            missing_packages.append("spacy language model (en_core_web_sm)")
+    
+    if missing_packages:
+        print("Warning: Some dependencies are missing:")
+        for package in missing_packages:
+            print(f"  - {package}")
+        print("\nTo install missing dependencies, run:")
+        print("  pip install -r requirements.txt")
+        print("  python -m spacy download en_core_web_sm")
+        
+        # If critical packages are missing, ask to continue
+        if any(p for p in missing_packages if "optional" not in p):
+            choice = input("\nContinue anyway? [y/N]: ")
+            if choice.lower() != 'y':
+                print("Exiting.")
+                sys.exit(1)
+    
+    return True
+
 def validate_data(file_path):
     """Validate that the JSON file has the expected structure."""
     try:
@@ -118,14 +170,48 @@ def merge_data_files(politician_name):
     
     return validate_data(output_path)
 
+def run_spider(spider_name, args, script_dir):
+    """Run a spider with proper error handling."""
+    try:
+        cmd = ["scrapy", "crawl", spider_name] + args
+        print(f"Running command: {' '.join(cmd)}")
+        result = subprocess.run(cmd, cwd=script_dir, capture_output=True, text=True)
+        
+        # Print the output
+        if result.stdout:
+            print(result.stdout)
+        
+        # Check for errors
+        if result.returncode != 0:
+            print(f"Error running {spider_name} spider:")
+            if result.stderr:
+                print(result.stderr)
+            return False
+        
+        return True
+    except Exception as e:
+        print(f"Failed to run {spider_name} spider: {str(e)}")
+        return False
+
 def main():
     parser = argparse.ArgumentParser(description="Political Data Scraper")
     parser.add_argument('--politician', type=str, required=True, 
                         help="Name of the politician to scrape data for")
     parser.add_argument('--api-key', type=str, 
                         help="NewsAPI API key (optional)")
+    parser.add_argument('--check-only', action='store_true',
+                        help="Only check dependencies, don't run scrapers")
+    parser.add_argument('--no-news', action='store_true',
+                        help="Skip the news API spider")
     
     args = parser.parse_args()
+    
+    # Check dependencies first
+    check_dependencies()
+    
+    if args.check_only:
+        print("Dependency check completed. Exiting.")
+        return
     
     # Get the directory of the script
     script_dir = Path(__file__).resolve().parent
@@ -137,17 +223,25 @@ def main():
     
     # Run the Wikipedia spider
     print("\n1. Running Wikipedia scraper...")
-    subprocess.run([
-        "scrapy", "crawl", "wikipedia_politician",
-        "-a", f"politician_name={args.politician}"
-    ], cwd=script_dir)
+    wiki_args = ["-a", f"politician_name={args.politician}"]
+    success = run_spider("wikipedia_politician", wiki_args, script_dir)
     
-    # Run the News API spider if API key provided
-    print("\n2. Running News API scraper...")
-    news_cmd = ["scrapy", "crawl", "news_api", "-a", f"politician_name={args.politician}"]
-    if args.api_key:
-        news_cmd.extend(["-a", f"api_key={args.api_key}"])
-    subprocess.run(news_cmd, cwd=script_dir)
+    if not success:
+        print("Wikipedia scraper failed. Continuing with other scrapers...")
+    
+    # Run the News API spider if requested
+    if not args.no_news:
+        print("\n2. Running News API scraper...")
+        news_args = ["-a", f"politician_name={args.politician}"]
+        if args.api_key:
+            news_args.extend(["-a", f"api_key={args.api_key}"])
+        
+        success = run_spider("news_api", news_args, script_dir)
+        
+        if not success:
+            print("News API scraper failed.")
+    else:
+        print("\n2. Skipping News API scraper as requested.")
     
     # Allow time for any file operations to complete
     time.sleep(1)
