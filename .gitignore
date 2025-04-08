@@ -22,16 +22,34 @@ wheels/
 
 # Environment
 .env
+.env.*
+!.env.example
 venv/
 ENV/
 env/
 .venv/
 .conda/
+conda_env/
+miniconda*/
+Miniconda*/
+aipolitician/
 
-# Data
-data/*.json
-data/chroma*/
-!data/sample_politician.json
+# Data and databases
+data/*/*.json
+data/chroma_db/
+data/politicians/
+data/formatted/
+data/embeddings/
+*.jsonl
+*.json
+!**/sample/*.json
+!**/examples/*.json
+!environment.json
+!package.json
+!tsconfig.json
+!jsconfig.json
+/data/formatted
+/data/politicians
 
 # Editor files
 .idea/
@@ -39,20 +57,34 @@ data/chroma*/
 *.swp
 *.swo
 .DS_Store
+*.sublime*
+*~
+.project
+.pydevproject
 
 # Scrapy
 .scrapy
 scrapy.log
 
-# Logs
+# Logs and temporary files
 *.log
 logs/
-
-# Temporary files
 *.tmp
 tmp/
+temp/
+.ipynb_checkpoints/
 
 # Testing and debug files
 test_*.py
 debug_*.py
 direct_*.py
+
+# Jupyter notebooks
+.ipynb_checkpoints
+*.ipynb
+
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+package-lock.json

@@ -1,9 +1,0 @@
-# Formatter Dependencies
-spacy>=3.5.0              # For entity recognition and sentence parsing
-nltk==3.8.1               # Natural Language Toolkit for text processing
-python-dateutil>=2.9.0.post0  # Powerful date parsing library
-numpy>=1.26.0             # Numerical operations
-
-# Note: Run the following commands to download required models
-# python -m spacy download en_core_web_sm
-# python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords')" 
