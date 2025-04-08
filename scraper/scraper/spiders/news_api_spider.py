@@ -1,8 +1,10 @@
 import scrapy
 import json
 import datetime
+import os
 from scrapy.exceptions import CloseSpider
 from ..items import PoliticianItem
+from dotenv import load_dotenv
 
 class NewsApiSpider(scrapy.Spider):
     name = "news_api"
@@ -12,13 +14,33 @@ class NewsApiSpider(scrapy.Spider):
         
         if not politician_name:
             raise CloseSpider("Politician name is required. Use -a politician_name='Name'")
-            
+        
+        # Try to load API key from .env file if not provided as argument
         if not api_key:
-            self.logger.warning("No API key provided. Using free limited NewsAPI access.")
-            self.use_api = False
-        else:
+            # Load environment variables from .env file
+            try:
+                # Look for .env in the project root directory
+                env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), '.env')
+                load_dotenv(env_path)
+                
+                # Try to get the API key from environment variables
+                api_key = os.getenv('NEWS_API_KEY')
+                
+                if api_key:
+                    self.logger.info("Using API key from .env file")
+                else:
+                    self.logger.warning("No API key found in .env file. Using free limited NewsAPI access.")
+            except Exception as e:
+                self.logger.error(f"Error loading .env file: {str(e)}")
+                api_key = None
+        
+        # Set API usage flag based on whether we have an API key
+        if api_key:
             self.use_api = True
             self.api_key = api_key
+        else:
+            self.logger.warning("No API key provided. Using free limited NewsAPI access.")
+            self.use_api = False
             
         # Format the query for news search
         self.politician_name = politician_name

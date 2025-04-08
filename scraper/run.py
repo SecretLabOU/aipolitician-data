@@ -14,6 +14,7 @@ import sys
 import time
 import json
 from pathlib import Path
+from dotenv import load_dotenv
 
 def check_dependencies():
     """Check if all required packages are installed."""
@@ -34,6 +35,11 @@ def check_dependencies():
         import requests
     except ImportError:
         missing_packages.append("requests")
+    
+    try:
+        import dotenv
+    except ImportError:
+        missing_packages.append("python-dotenv")
     
     # Try to import spacy, but it's optional (fallback available)
     try:
@@ -198,7 +204,7 @@ def main():
     parser.add_argument('--politician', type=str, required=True, 
                         help="Name of the politician to scrape data for")
     parser.add_argument('--api-key', type=str, 
-                        help="NewsAPI API key (optional)")
+                        help="NewsAPI API key (optional, will use from .env file if not provided)")
     parser.add_argument('--check-only', action='store_true',
                         help="Only check dependencies, don't run scrapers")
     parser.add_argument('--no-news', action='store_true',
@@ -215,6 +221,12 @@ def main():
     
     # Get the directory of the script
     script_dir = Path(__file__).resolve().parent
+    
+    # Load environment variables from .env file if exists
+    env_path = script_dir / '.env'
+    if env_path.exists():
+        load_dotenv(env_path)
+        print("Loaded environment variables from .env file")
     
     # Ensure we're in the correct directory
     os.chdir(script_dir)
@@ -233,8 +245,14 @@ def main():
     if not args.no_news:
         print("\n2. Running News API scraper...")
         news_args = ["-a", f"politician_name={args.politician}"]
-        if args.api_key:
-            news_args.extend(["-a", f"api_key={args.api_key}"])
+        
+        # Check for API key from command line or .env file
+        api_key = args.api_key or os.getenv('NEWS_API_KEY')
+        if api_key:
+            news_args.extend(["-a", f"api_key={api_key}"])
+            print("Using NewsAPI key for better results")
+        else:
+            print("No NewsAPI key found. Will use limited access mode.")
         
         success = run_spider("news_api", news_args, script_dir)
         
