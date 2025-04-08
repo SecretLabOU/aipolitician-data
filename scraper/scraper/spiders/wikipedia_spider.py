@@ -25,9 +25,15 @@ class WikipediaPoliticianSpider(scrapy.Spider):
             
         # Format the name for URL
         self.politician_name = politician_name
-        query = urllib.parse.quote(politician_name)
-        self.start_urls = [f"https://en.wikipedia.org/wiki/Special:Search?search={query}&go=Go"]
-        self.logger.info(f"Starting search for: {politician_name}")
+        
+        # Create direct Wikipedia URL instead of search
+        formatted_name = politician_name.replace(' ', '_')
+        self.start_urls = [f"https://en.wikipedia.org/wiki/{urllib.parse.quote(formatted_name)}"]
+        
+        # Fallback to search page if direct access fails
+        self.search_url = f"https://en.wikipedia.org/wiki/Special:Search?search={urllib.parse.quote(politician_name)}&go=Go"
+        
+        self.logger.info(f"Starting for: {politician_name}")
         self.logger.info(f"Start URL: {self.start_urls[0]}")
         self.logger.info(f"Follow links: {self.follow_links}, Max links: {self.max_links}")
         
@@ -43,16 +49,26 @@ class WikipediaPoliticianSpider(scrapy.Spider):
     
     def parse(self, response):
         """
-        Parse the search results page and follow the first result if available.
+        Parse the Wikipedia page or fallback to search if needed.
         """
         self.logger.info(f"Processing URL: {response.url}")
         self.visited_urls.add(response.url)
         
-        # Check if we're already on a politician's page
-        if response.url.startswith("https://en.wikipedia.org/wiki/") and "/Special:" not in response.url:
-            self.logger.info("Already on a Wikipedia article page")
-            return self.parse_politician_page(response)
+        # Check if we're on a valid page
+        page_exists = response.css("#noarticletext").get() is None
+        
+        if not page_exists:
+            self.logger.info(f"Page does not exist, trying search: {self.search_url}")
+            yield scrapy.Request(self.search_url, callback=self.parse_search_results)
+            return
             
+        # We're on a valid page, continue with parsing
+        return self.parse_politician_page(response)
+        
+    def parse_search_results(self, response):
+        """Parse search results and follow the first result."""
+        self.logger.info(f"Processing search results: {response.url}")
+        
         # Check for direct hit or search results
         first_result = response.css(".mw-search-result-heading a::attr(href)").get()
         
