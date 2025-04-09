@@ -24,7 +24,7 @@ STAR="⭐"
 # ===== CONFIGURATION =====
 # Get the directory of this script
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-CONDA_ENV_NAME="aipolitician"
+CONDA_ENV_NAME="aipolitician-chromadb"
 PYTHON_VERSION="3.10"
 DB_DIR="/opt/chroma_db"
 

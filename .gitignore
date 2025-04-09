@@ -32,7 +32,7 @@ env/
 conda_env/
 miniconda*/
 Miniconda*/
-aipolitician/
+aipolitician-chromadb/
 
 # Data and databases
 data/*/*.json

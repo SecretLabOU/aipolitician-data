@@ -64,7 +64,7 @@ chmod +x setup_politician.sh
 ```
 
 This script will:
-1. Create and configure a Conda environment
+1. Create and configure a Conda environment (`aipolitician-chromadb`)
 2. Install all dependencies
 3. Set up the ChromaDB database
 4. Scrape data for the specified politician

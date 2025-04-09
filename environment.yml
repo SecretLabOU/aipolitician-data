@@ -1,4 +1,5 @@
-name: aipolitician
+# This file specifies the Conda environment for the AI Politician project
+name: aipolitician-chromadb
 channels:
   - conda-forge
   - defaults
