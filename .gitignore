@@ -36,7 +36,6 @@ aipolitician/
 
 # Data and databases
 data/*/*.json
-data/chroma_db/
 data/politicians/
 data/formatted/
 data/embeddings/
@@ -48,8 +47,6 @@ data/embeddings/
 !package.json
 !tsconfig.json
 !jsconfig.json
-/data/formatted
-/data/politicians
 
 # Editor files
 .idea/

@@ -26,7 +26,7 @@ STAR="⭐"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 CONDA_ENV_NAME="aipolitician"
 PYTHON_VERSION="3.10"
-DB_DIR="$SCRIPT_DIR/data/chroma_db"
+DB_DIR="/opt/chroma_db"
 
 # ===== HELPER FUNCTIONS =====
 print_header() {
@@ -186,8 +186,25 @@ print_step "Setting up Chroma database"
 if [ -d "$DB_DIR" ]; then
     print_info "Database directory already exists at $DB_DIR"
 else
-    print_info "Creating database directory at $DB_DIR"
-    mkdir -p "$DB_DIR"
+    print_info "Attempting to create database directory at $DB_DIR"
+    # Try to create the directory (might need sudo)
+    if mkdir -p "$DB_DIR" 2>/dev/null; then
+        print_success "Created database directory at $DB_DIR"
+    else
+        print_error "Could not create $DB_DIR. You may need sudo privileges."
+        print_info "Please run: sudo mkdir -p $DB_DIR && sudo chown $USER:$USER $DB_DIR"
+        print_warning "Continuing with setup, but Chroma database operations may fail"
+    fi
+fi
+
+# Check permissions on database directory
+if [ -d "$DB_DIR" ]; then
+    if [ ! -w "$DB_DIR" ] || [ ! -r "$DB_DIR" ]; then
+        print_error "Missing permissions on $DB_DIR"
+        print_info "Please run: sudo chown $USER:$USER $DB_DIR"
+        print_info "And: sudo chmod 755 $DB_DIR"
+        print_warning "Continuing with setup, but Chroma database operations may fail"
+    fi
 fi
 
 # Run Chroma setup

@@ -11,7 +11,7 @@ from chroma_patched import chromadb  # Get the patched chromadb module
 from chromadb.config import Settings
 
 # Database directory path - centralized configuration
-DB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "chroma_db")
+DB_DIR = "/opt/chroma_db"
 
 def check_directory_access(directory, need_write=True):
     """Check if the directory exists and has proper permissions."""

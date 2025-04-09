@@ -7,6 +7,7 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 VENV_DIR="$SCRIPT_DIR/.venv"
 PYTHON_CMD="python3"
+DB_DIR="/opt/chroma_db"
 
 # Check if Python 3 is installed
 if ! command -v $PYTHON_CMD &> /dev/null; then
@@ -54,7 +55,21 @@ python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords')"
 # Create data directories
 mkdir -p "$SCRIPT_DIR/data/politicians"
 mkdir -p "$SCRIPT_DIR/data/formatted"
-mkdir -p "$SCRIPT_DIR/data/chroma_db"
+
+# Check if database directory exists
+if [ -d "$DB_DIR" ]; then
+    echo "Using existing database directory at $DB_DIR"
+else
+    echo "Attempting to create database directory at $DB_DIR"
+    # Try to create the directory (might need sudo)
+    if mkdir -p "$DB_DIR" 2>/dev/null; then
+        echo "Created database directory at $DB_DIR"
+    else
+        echo "Error: Could not create $DB_DIR. You may need sudo privileges."
+        echo "Please run: sudo mkdir -p $DB_DIR && sudo chown $USER:$USER $DB_DIR"
+        exit 1
+    fi
+fi
 
 # Set up ChromaDB
 echo "Setting up ChromaDB..."

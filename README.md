@@ -23,9 +23,33 @@ This repository contains tools for scraping, formatting, and querying data about
 - **data/**: Contains data directories
   - `politicians/`: Raw politician data
   - `formatted/`: Formatted politician data
-  - `chroma_db/`: ChromaDB database
+
+Note: The ChromaDB database is stored externally at `/opt/chroma_db` and not in the project directory.
+
+## Data Structure
+
+The project uses the following data structure:
+
+- `politicians/`: Raw data files for each politician
+- `formatted/`: Processed data in a format suitable for the RAG system
+- The Chroma vector database is stored at `/opt/chroma_db`
 
 ## Getting Started
+
+### Database Permissions
+
+This project stores the ChromaDB database at `/opt/chroma_db`. Before running any scripts, ensure you have the proper permissions:
+
+```bash
+# Create the directory if it doesn't exist (requires sudo)
+sudo mkdir -p /opt/chroma_db
+
+# Set the proper ownership so your user can read/write to it
+sudo chown $USER:$USER /opt/chroma_db
+
+# Set proper permissions
+sudo chmod 755 /opt/chroma_db
+```
 
 ### Using the All-in-One Setup Script
 
