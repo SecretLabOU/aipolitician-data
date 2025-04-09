@@ -1,145 +1,267 @@
-# AI Politician Data
+# AI Politician Data 🏛️
 
-This repository contains tools for scraping, formatting, and querying data about politicians for use in AI applications.
+This repository contains tools for scraping, formatting, and querying data about politicians using vector embeddings and retrieval-augmented generation (RAG).
 
-## Project Structure
+## 📂 Project Structure
 
-- **scraper/**: Contains scripts for scraping politician data from various sources
-  - `politician_scraper.py`: Main scraper for politician data
-  - `search_utility.py`: Utility for searching politician data without using ChromaDB
+- **scraper/**: Scripts for data collection
+  - `politician_scraper.py`: Main scraper for politician data from Wikipedia, Ballotpedia, etc.
+  - `search_utility.py`: Search utility without ChromaDB dependency
 
-- **formatter/**: Contains scripts for formatting raw politician data
-  - `data_formatter.py`: Formats raw data into a structure suitable for RAG applications
+- **formatter/**: Data preparation tools
+  - `data_formatter.py`: Converts raw data into structured format for RAG
 
-- **scripts/**: Contains scripts for loading and querying data
-  - `chroma_patched.py`: Compatibility patch for ChromaDB to work with NumPy 2.0
-  - `chroma_config_patched.py`: Configuration for ChromaDB with NumPy 2.0 compatibility
-  - `chroma_setup.py`: Script to set up ChromaDB
-  - `ingest_data_patched.py`: Script to ingest formatted data into ChromaDB
-  - `query_data_patched.py`: Script to query data from ChromaDB
-  - `diagnose_chroma.py`: Diagnostic script for ChromaDB
-  - `load_formatted_data.py`: Script to load formatted data without using ChromaDB
+- **scripts/**: Core functionality
+  - `chroma_patched.py`: ChromaDB compatibility patch for NumPy 2.0
+  - `chroma_config_patched.py`: ChromaDB configuration
+  - `chroma_setup.py`: Database initialization
+  - `ingest_data_patched.py`: Data ingestion pipeline
+  - `query_data_patched.py`: Data retrieval interface
+  - `diagnose_chroma.py`: Database diagnostic tool
+  - `load_formatted_data.py`: Alternative data loader
 
-- **data/**: Contains data directories
-  - `politicians/`: Raw politician data
-  - `formatted/`: Formatted politician data
+- **data/**: Generated data directories
+  - `politicians/`: Raw scraped data (JSON)
+  - `formatted/`: Processed data optimized for RAG
 
-Note: The ChromaDB database is stored externally at `/opt/chroma_db` and not in the project directory.
+> **Note**: The ChromaDB database is stored at `/opt/chroma_db` rather than in the project directory.
 
-## Data Structure
+## 🚀 Getting Started
 
-The project uses the following data structure:
+### Prerequisites
 
-- `politicians/`: Raw data files for each politician
-- `formatted/`: Processed data in a format suitable for the RAG system
-- The Chroma vector database is stored at `/opt/chroma_db`
+- Python 3.10+ 
+- Conda (recommended) or virtualenv
+- For Selenium scraping: Chrome/Chromium browser
+- Sudo privileges to create the database directory (one-time only)
 
-## Getting Started
-
-### Database Permissions
-
-This project stores the ChromaDB database at `/opt/chroma_db`. Before running any scripts, ensure you have the proper permissions:
+### 1️⃣ Clone the Repository
 
 ```bash
-# Create the directory if it doesn't exist (requires sudo)
+git clone https://github.com/yourusername/aipolitician-data.git
+cd aipolitician-data
+```
+
+### 2️⃣ Database Setup
+
+The system stores vector embeddings in ChromaDB at `/opt/chroma_db`. Set up the directory with:
+
+```bash
+# Create the database directory (requires sudo)
 sudo mkdir -p /opt/chroma_db
 
-# Set the proper ownership so your user can read/write to it
+# Set ownership to your user
 sudo chown $USER:$USER /opt/chroma_db
 
 # Set proper permissions
 sudo chmod 755 /opt/chroma_db
 ```
 
-### Using the All-in-One Setup Script
-
-The easiest way to get started is to use the all-in-one setup script that handles the complete pipeline:
+### 3️⃣ Make Scripts Executable
 
 ```bash
-# Make the script executable
-chmod +x setup_politician.sh
+chmod +x setup_politician.sh run_without_conda.sh
+```
 
-# Run the setup script with a politician name
+### 4️⃣ Run the Setup Script
+
+#### Option A: With Conda (Recommended)
+
+```bash
+./setup_politician.sh "Politician Name"
+```
+
+For example:
+```bash
 ./setup_politician.sh "Bernie Sanders"
 ```
 
-This script will:
-1. Create and configure a Conda environment (`aipolitician-chromadb`)
-2. Install all dependencies
-3. Set up the ChromaDB database
+The script will:
+1. Create and activate a Conda environment (`aipolitician-chromadb`)
+2. Install all dependencies 
+3. Set up ChromaDB
 4. Scrape data for the specified politician
-5. Format the data
-6. Load the data into ChromaDB
-7. Run a test query to verify everything works
+5. Format the data for RAG
+6. Load data into ChromaDB
+7. Run a test query
 
-### Manual Steps
+#### Option B: Without Conda (Linux only)
 
-If you prefer to run the steps manually:
+```bash
+./run_without_conda.sh "Politician Name"
+```
 
-1. **Setup dependencies**:
+### 5️⃣ Add Multiple Politicians
+
+You can add multiple politicians to the database sequentially:
+
+```bash
+./setup_politician.sh "Joe Biden"
+./setup_politician.sh "Donald Trump"
+./setup_politician.sh "Kamala Harris"
+```
+
+Each politician's data is stored separately in the database and can be queried independently.
+
+### 6️⃣ Query the Data
+
+After setup, query the database with:
+
+```bash
+python scripts/query_data_patched.py --query "What is their position on healthcare?" --politician "Bernie Sanders" --results 3
+```
+
+## 📝 Example Commands
+
+### Basic Query
+
+```bash
+python scripts/query_data_patched.py --query "climate change"
+```
+
+### Filtered Query
+
+```bash
+python scripts/query_data_patched.py --query "economy" --politician "Elizabeth Warren" --type "wikipedia_content"
+```
+
+### Detailed Response
+
+```bash
+python scripts/query_data_patched.py --query "foreign policy" --results 5
+```
+
+### Force Rescraping Data
+
+```bash
+./setup_politician.sh "Bernie Sanders" --force-scrape
+```
+
+### Force Reformatting Data
+
+```bash
+./setup_politician.sh "Bernie Sanders" --force-format
+```
+
+## ⚙️ Manual Setup (Advanced)
+
+If you prefer to run each step manually:
+
+1. **Install dependencies**:
    ```bash
-   # Install requirements
    pip install -r requirements.txt
    
-   # Download required NLP models
+   # Download NLP models
    python -m spacy download en_core_web_sm
    python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords')"
    ```
 
-2. **Scrape politician data**:
+2. **Scrape data**:
    ```bash
    python scraper/politician_scraper.py "Politician Name"
    ```
 
-3. **Format the data**:
+3. **Format data**:
    ```bash
    python formatter/data_formatter.py --single data/politicians/politician_name.json
    ```
 
-4. **Set up ChromaDB and load data**:
+4. **Set up database**:
    ```bash
-   # Setup ChromaDB
    python scripts/chroma_setup.py
-   
-   # Ingest the formatted data
-   python scripts/ingest_data_patched.py data/formatted/formatted_*.json
    ```
 
-5. **Query the data**:
+5. **Ingest data**:
    ```bash
-   python scripts/query_data_patched.py --query "What are Bernie Sanders' views on healthcare?" --politician "Bernie Sanders" --results 3
+   python scripts/ingest_data_patched.py data/formatted/formatted_politician_name.json
    ```
 
-## ChromaDB Compatibility
+6. **Query data**:
+   ```bash
+   python scripts/query_data_patched.py --query "Your question?" --politician "Politician Name"
+   ```
 
-This project includes a patch for ChromaDB to work with NumPy 2.0. The patch adds back deprecated NumPy types that were removed in NumPy 2.0.
+## 🔍 Troubleshooting
 
-- If you encounter any issues with ChromaDB, run the diagnostic script:
-  ```bash
-  python scripts/diagnose_chroma.py
-  ```
+### Database Permission Issues
 
-## Alternative Data Loading
+If you see errors like:
+```
+Error: Could not create /opt/chroma_db. You may need sudo privileges.
+```
 
-If you prefer not to use ChromaDB, you can use the `load_formatted_data.py` script to generate embeddings:
+Run these commands:
+```bash
+sudo mkdir -p /opt/chroma_db
+sudo chown $USER:$USER /opt/chroma_db
+sudo chmod 755 /opt/chroma_db
+```
+
+### Wrong Data Being Used
+
+If you see references to the wrong politician:
+
+```bash
+# Run with both flags to force fresh data
+./setup_politician.sh "Politician Name" --force-scrape --force-format
+```
+
+### SQLite Errors
+
+If you encounter `sqlite3.OperationalError` with messages about missing columns or tables:
+
+```bash
+# Clean the database and start fresh
+sudo rm -rf /opt/chroma_db/*
+sudo chown $USER:$USER /opt/chroma_db
+sudo chmod 755 /opt/chroma_db
+```
+
+### ChromaDB Compatibility
+
+This project includes patches for ChromaDB to work with NumPy 2.0. If you have issues:
+
+```bash
+python scripts/diagnose_chroma.py
+```
+
+### Selenium WebDriver Errors
+
+If the scraper fails with Selenium errors:
+- Ensure Chrome or Chromium is installed
+- For Linux users: `sudo apt install chromium-browser`
+
+## 📃 Data Structure
+
+The processed data is organized as follows:
+
+- **Raw data**: `data/politicians/politician_name.json`
+- **Formatted data**: `data/formatted/formatted_politician_name.json`
+- **Vector database**: `/opt/chroma_db`
+
+Each politician's data contains:
+- Wikipedia content
+- Ballotpedia information 
+- Voting records (when available)
+- Biographical information
+- Social media details (when available)
+
+## 🛠️ Advanced Features
+
+### Alternative Data Loading (No ChromaDB)
 
 ```bash
 python scripts/load_formatted_data.py data/formatted/*.json --output-dir data/embeddings
 ```
 
-## Example Queries
+### Running on Remote Servers
 
-- Basic query:
-  ```bash
-  python scripts/query_data_patched.py --query "healthcare"
-  ```
+For headless environments:
+1. Install a headless browser: `sudo apt install chromium-browser`
+2. Use the `--no-sandbox` flag (added automatically in the scripts)
 
-- Query with filters:
-  ```bash
-  python scripts/query_data_patched.py --query "economy" --politician "Elizabeth Warren" --type "wikipedia_content"
-  ```
+## 📚 Additional Resources
 
-- Query with more results:
-  ```bash
-  python scripts/query_data_patched.py --query "foreign policy" --results 5
-  ``` 
+- [ChromaDB Documentation](https://docs.trychroma.com/)
+- [Selenium Documentation](https://selenium-python.readthedocs.io/)
+- [SpaCy Documentation](https://spacy.io/usage) 
