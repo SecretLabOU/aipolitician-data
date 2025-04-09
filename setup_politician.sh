@@ -225,10 +225,21 @@ print_step "Scraping data for $POLITICIAN_NAME"
 mkdir -p "$SCRIPT_DIR/data/politicians"
 mkdir -p "$SCRIPT_DIR/data/formatted"
 
-# Check if the politician data already exists
-EXISTING_FILE=$(find "$SCRIPT_DIR/data/politicians" -name "*.json" -exec grep -l "$POLITICIAN_NAME" {} \; | head -n 1)
+# Generate filename exactly as the scraper does using Python to ensure compatibility
+# This follows the exact regex logic in politician_scraper.py:
+# safe_filename = re.sub(r'[^\w\s-]', '', self.name).strip().lower()
+# safe_filename = re.sub(r'[-\s]+', '_', safe_filename)
+SAFE_POLITICIAN_NAME=$(python3 -c "
+import re
+name = \"$POLITICIAN_NAME\"
+safe_filename = re.sub(r'[^\w\s-]', '', name).strip().lower()
+safe_filename = re.sub(r'[-\s]+', '_', safe_filename)
+print(safe_filename)
+")
+POLITICIAN_FILENAME="${SAFE_POLITICIAN_NAME}.json"
+EXISTING_FILE="$SCRIPT_DIR/data/politicians/$POLITICIAN_FILENAME"
 
-if [ -n "$EXISTING_FILE" ] && [ "$2" != "--force-scrape" ]; then
+if [ -f "$EXISTING_FILE" ] && [ "$2" != "--force-scrape" ]; then
     print_info "Found existing data for $POLITICIAN_NAME at: $EXISTING_FILE"
     print_info "Skipping scraping step. Use --force-scrape to scrape anyway."
     SCRAPED_FILE="$EXISTING_FILE"
@@ -243,10 +254,10 @@ else
         print_success "Successfully scraped data for $POLITICIAN_NAME"
     fi
 
-    # Find the scraped file
-    SCRAPED_FILE=$(find "$SCRIPT_DIR/data/politicians" -name "*.json" -exec grep -l "$POLITICIAN_NAME" {} \; | head -n 1)
+    # Find the scraped file by exact filename
+    SCRAPED_FILE="$SCRIPT_DIR/data/politicians/$POLITICIAN_FILENAME"
 
-    if [ -z "$SCRAPED_FILE" ]; then
+    if [ ! -f "$SCRAPED_FILE" ]; then
         print_error "No scraped data found for $POLITICIAN_NAME" "exit"
     fi
 fi
@@ -256,13 +267,13 @@ print_info "Using scraped data from: $SCRAPED_FILE"
 # ===== FORMAT DATA =====
 print_step "Formatting scraped data"
 
-# Check if formatted data already exists
-EXISTING_FORMATTED=$(find "$SCRIPT_DIR/data/formatted" -name "formatted_*.json" -exec grep -l "$POLITICIAN_NAME" {} \; | head -n 1)
+# Check if formatted data already exists - use exact match
+FORMATTED_FILENAME="formatted_$POLITICIAN_FILENAME"
+FORMATTED_FILE="$SCRIPT_DIR/data/formatted/$FORMATTED_FILENAME"
 
-if [ -n "$EXISTING_FORMATTED" ] && [ "$2" != "--force-format" ]; then
-    print_info "Found existing formatted data for $POLITICIAN_NAME at: $EXISTING_FORMATTED"
+if [ -f "$FORMATTED_FILE" ] && [ "$2" != "--force-format" ]; then
+    print_info "Found existing formatted data for $POLITICIAN_NAME at: $FORMATTED_FILE"
     print_info "Skipping formatting step. Use --force-format to reformat anyway."
-    FORMATTED_FILE="$EXISTING_FORMATTED"
 else
     print_info "Running data formatter"
     python "$SCRIPT_DIR/formatter/data_formatter.py" --single "$SCRAPED_FILE"
@@ -271,10 +282,8 @@ else
         print_error "Failed to format data" "exit"
     fi
 
-    # Find formatted file
-    FORMATTED_FILE=$(find "$SCRIPT_DIR/data/formatted" -name "formatted_*.json" -exec grep -l "$POLITICIAN_NAME" {} \; | head -n 1)
-
-    if [ -z "$FORMATTED_FILE" ]; then
+    # Check if formatted file exists
+    if [ ! -f "$FORMATTED_FILE" ]; then
         print_error "No formatted data found for $POLITICIAN_NAME" "exit"
     fi
     
