@@ -265,3 +265,65 @@ For headless environments:
 - [ChromaDB Documentation](https://docs.trychroma.com/)
 - [Selenium Documentation](https://selenium-python.readthedocs.io/)
 - [SpaCy Documentation](https://spacy.io/usage) 
+
+## 🔄 System Workflow
+
+```mermaid
+graph TD
+    A[Scrape Politician Data] --> B[Raw Data JSON]
+    B --> C[Format & Chunk Data]
+    C --> D[Formatted Data JSON]
+    
+    D --> E[Database Setup]
+    E --> F[Ingest Data]
+    
+    F --> G[Generate Embeddings]
+    G --> H[Store in ChromaDB]
+    
+    I[User Query] --> J[Convert Query to Embedding]
+    J --> K[Search Vector Database]
+    K --> L[Retrieve Relevant Chunks]
+    L --> M[Return Results]
+    
+    N[Setup Politician Script] --> A
+    N --> E
+    
+    subgraph "Data Preparation"
+    A
+    B
+    C
+    D
+    end
+    
+    subgraph "Database Operations"
+    E
+    F
+    G
+    H
+    end
+    
+    subgraph "Query Process"
+    I
+    J
+    K
+    L
+    M
+    end
+    
+    subgraph "Alternative Paths"
+    D --> O[Non-ChromaDB Path]
+    O --> P[Generate Standalone Embeddings]
+    P --> Q[JSON with Embeddings]
+    end
+    
+    D --> R{Data Already Exists?}
+    R -->|Yes| S[Skip Scraping]
+    R -->|No| A
+    S --> F
+    
+    T[Force Flags] --> U{Force Scrape?}
+    U -->|Yes| A
+    U -->|No| V{Force Format?}
+    V -->|Yes| C
+    V -->|No| R
+``` 
