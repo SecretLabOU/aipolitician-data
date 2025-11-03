@@ -10,11 +10,21 @@ This project scrapes biographical information, statements, and speeches of polit
 
 The data is processed with NLP tools and saved in a format ready for both human analysis and machine learning applications.
 
+## 📖 Documentation
+
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Comprehensive documentation on:
+  - Complete data pipeline architecture and flow
+  - Data ingestion and storage mechanisms
+  - All tools and technologies used
+  - Detailed component explanations
+  - Performance considerations and best practices
+
 ## Project Structure
 
 ```
 aipolitician-data/
 ├── README.md                   # This documentation
+├── ARCHITECTURE.md             # Detailed architecture and pipeline documentation
 ├── .gitignore                  # Git ignore file for the entire project
 ├── .env.example                # Example environment variables file
 ├── diagnostic.py               # Diagnostic tool for troubleshooting
@@ -38,6 +48,32 @@ aipolitician-data/
     ├── ingest_data.py          # Process and store data in ChromaDB
     └── query_data.py           # Query the stored data
 ```
+
+## How It Works - Quick Overview
+
+This project implements a multi-stage data pipeline:
+
+### 1. **Data Collection** 
+   - **Wikipedia Spider**: Scrapes biographical data, political positions, and speeches
+   - **News API Spider**: Collects recent news articles and statements
+   - Both spiders use Scrapy framework for robust, concurrent web scraping
+
+### 2. **Data Processing**
+   - **PoliticianPipeline**: Cleans and structures the collected data
+   - Uses spaCy for advanced NLP text processing
+   - Normalizes content and generates metadata
+
+### 3. **Data Storage**
+   - **JSON Files**: Human-readable format in `data/` directory
+   - **ChromaDB**: Vector database for semantic search and AI applications
+   - Dual storage enables both direct access and intelligent querying
+
+### 4. **Data Retrieval**
+   - Query stored data using semantic search
+   - Natural language queries powered by vector embeddings
+   - Efficient retrieval of relevant speeches, statements, and biographical data
+
+📚 **For detailed architecture documentation**, see [ARCHITECTURE.md](ARCHITECTURE.md)
 
 ## Setup
 
